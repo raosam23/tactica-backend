@@ -1,5 +1,6 @@
 # Python-generated files
 __pycache__/
+*.pyc
 *.py[oc]
 build/
 dist/
@@ -24,7 +25,7 @@ uv.lock.bak
 
 # Alembic
 # Keep alembic/versions/ tracked, but ignore any local overrides
-alembic.ini.local
+alembic.ini
 
 # pgvector / PostgreSQL
 *.sql.bak

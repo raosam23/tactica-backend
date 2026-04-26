@@ -10,6 +10,7 @@ dependencies = [
     "autogen-agentchat>=0.7.5",
     "beautifulsoup4>=4.14.3",
     "fastapi>=0.136.1",
+    "greenlet>=3.4.0",
     "httpx>=0.28.1",
     "lxml>=6.1.0",
     "openai>=2.32.0",
