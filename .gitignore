@@ -1,0 +1,58 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# uv
+uv.lock.bak
+
+# FastAPI / Uvicorn
+*.log
+
+# Alembic
+# Keep alembic/versions/ tracked, but ignore any local overrides
+alembic.ini.local
+
+# pgvector / PostgreSQL
+*.sql.bak
+pg_data/
+
+# AutoGen / OpenAI cache
+.cache/
+autogen_cache/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# mypy / type checking
+.mypy_cache/
+.dmypy.json
