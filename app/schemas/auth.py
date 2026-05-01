@@ -1,3 +1,4 @@
+import uuid
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -13,3 +14,8 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str = Field(description="The JWT access token")
     token_type: str = Field(default="bearer", description="The type of the token")
+
+class DeleteAccountResponse(BaseModel):
+    id: uuid.UUID = Field(description="The unique identifier of the deleted user account")
+    email: str = Field(description="The email address of the deleted user account")
+    name: Optional[str] = Field(default=None, description="The full name of the deleted user account")

@@ -3,7 +3,7 @@ from app.core.config import settings
 from typing import Dict, Any, Optional
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Depends, HTTPException, status
 from app.db.database import get_session
 from app.models import User
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from uuid import UUID
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = HTTPBearer()
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password using bcrypt."""
@@ -28,7 +28,7 @@ def create_access_token(data: Dict[str, Any]) -> str:
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
-async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSession = Depends(get_session)) -> Optional[User]:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(oauth2_scheme), session: AsyncSession = Depends(get_session)) -> Optional[User]:
     """Decode the JWT token and return the current user information."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -36,6 +36,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        token = credentials.credentials
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
         try:

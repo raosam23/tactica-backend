@@ -2,6 +2,7 @@ from typing import Optional
 from app.models import User
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.schemas.auth import DeleteAccountResponse
 from app.utils.security import hash_password, verify_password, create_access_token
 from fastapi import HTTPException, status
 
@@ -25,3 +26,9 @@ async def LoginService(session: AsyncSession, email: str, password: str) -> Opti
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     return create_access_token({"sub": str(user.id)})
+
+async def DeleteAccountService(session: AsyncSession, user: User) -> DeleteAccountResponse:
+    """Service to handle account deletion."""
+    await session.delete(user)
+    await session.commit()
+    return DeleteAccountResponse(id=user.id, email=user.email, name=user.name)

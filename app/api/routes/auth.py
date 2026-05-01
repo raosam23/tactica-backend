@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
-from app.services.authentication_service import RegisterService, LoginService
+from app.services.authentication_service import RegisterService, LoginService, DeleteAccountService
 from app.db.database import get_session
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, DeleteAccountResponse
+from app.models import User
+from app.utils.security import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/auth")
@@ -17,3 +19,8 @@ async def login(request: LoginRequest, session: AsyncSession = Depends(get_sessi
     """Endpoint to handle user login."""
     token = await LoginService(session, request.email, request.password)
     return TokenResponse(access_token=token, token_type="bearer")
+
+@router.delete("/me", response_model=DeleteAccountResponse)
+async def delete_account(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> DeleteAccountResponse:
+    """Endpoint to handle account deletion."""
+    return await DeleteAccountService(session, current_user)
