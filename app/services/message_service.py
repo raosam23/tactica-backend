@@ -13,7 +13,7 @@ async def GetMessagesService(session: AsyncSession, user: User, conversation_id:
     conversation = await GetConversationService(session, user, conversation_id)
     result = await session.execute(select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at.asc()))
     messages = result.scalars().all()
-    return messages
+    return [MessageResponse.model_validate(message) for message in messages]
 
 async def CreateMessageService(session: AsyncSession, conversation_id: uuid.UUID, role: RoleType, content: str) -> MessageResponse:
     """Service to create a new message in a conversation."""
@@ -25,4 +25,4 @@ async def CreateMessageService(session: AsyncSession, conversation_id: uuid.UUID
     session.add(new_message)
     await session.commit()
     await session.refresh(new_message)
-    return new_message
+    return MessageResponse.model_validate(new_message)

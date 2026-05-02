@@ -12,13 +12,13 @@ async def CreateConversationService(session: AsyncSession, user: User, conversat
     session.add(new_conversation)
     await session.commit()
     await session.refresh(new_conversation)
-    return new_conversation
+    return ConversationResponse.model_validate(new_conversation)
 
 async def GetConversationsService(session: AsyncSession, user: User) -> List[ConversationResponse]:
     """Service to retrieve all conversations for a user."""
     result = await session.execute(select(Conversation).where(Conversation.user_id == user.id).order_by(Conversation.updated_at.desc()))
     conversations = result.scalars().all()
-    return conversations
+    return [ConversationResponse.model_validate(conversation) for conversation in conversations]
 
 async def GetConversationService(session: AsyncSession, user: User, conversation_id: uuid.UUID) -> ConversationResponse:
     """Service to retrieve a specific conversation by ID."""
@@ -28,10 +28,10 @@ async def GetConversationService(session: AsyncSession, user: User, conversation
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
     if conversation.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to access this conversation.")
-    return conversation
+    return ConversationResponse.model_validate(conversation)
 
 async def DeleteConversationService(session: AsyncSession, conversation: Conversation) -> ConversationResponse:
     """Service to delete a conversation."""
     await session.delete(conversation)
     await session.commit()
-    return conversation
+    return ConversationResponse.model_validate(conversation)
