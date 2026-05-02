@@ -1,10 +1,13 @@
 import uuid
-from app.schemas.conversation import ConversationCreate, ConversationResponse
-from app.models import Conversation, User
-from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
 from typing import List
+
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+from app.models import Conversation, User
+from app.schemas.conversation import ConversationCreate, ConversationResponse
+
 
 async def CreateConversationService(session: AsyncSession, user: User, conversation: ConversationCreate) -> ConversationResponse:
     """Service to create a new conversation."""

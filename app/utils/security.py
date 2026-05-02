@@ -1,15 +1,17 @@
-from bcrypt import hashpw, gensalt, checkpw
-from app.core.config import settings
-from typing import Dict, Any, Optional
-from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Any, Dict, Optional
+from uuid import UUID
+
+from bcrypt import checkpw, gensalt, hashpw
 from fastapi import Depends, HTTPException, status
-from app.db.database import get_session
-from app.models import User
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from uuid import UUID
+
+from app.core.config import settings
+from app.db.database import get_session
+from app.models import User
 
 oauth2_scheme = HTTPBearer()
 

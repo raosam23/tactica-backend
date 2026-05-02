@@ -1,6 +1,8 @@
-import httpx
+from typing import Any, Dict, List, Optional
+
 import feedparser
-from typing import Optional, List, Dict, Any
+import httpx
+
 
 async def scrape_wikipedia_articles(
     titles: List[str],

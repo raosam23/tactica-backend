@@ -1,7 +1,9 @@
 import uuid
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class ConversationCreate(BaseModel):
     title: Optional[str] = Field(default=None, description="The title of the conversation")

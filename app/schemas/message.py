@@ -1,7 +1,9 @@
 import uuid
-from app.models.message import Role as RoleType
-from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.message import Role as RoleType
 
 
 class MessageCreate(BaseModel):

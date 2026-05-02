@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List
-from sqlmodel import SQLModel, Field, Relationship
+from typing import List, Optional
+
 from sqlalchemy import UUID, Column, DateTime, ForeignKey
 from sqlalchemy.sql import func
+from sqlmodel import Field, Relationship, SQLModel
+
 
 class Role(str, Enum):
     """Defines the role of a message in a conversation."""

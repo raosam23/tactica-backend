@@ -1,10 +1,14 @@
 from typing import Optional
-from app.models import User
-from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas.auth import DeleteAccountResponse
-from app.utils.security import hash_password, verify_password, create_access_token
+
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+from app.models import User
+from app.schemas.auth import DeleteAccountResponse
+from app.utils.security import (create_access_token, hash_password,
+                                verify_password)
+
 
 async def RegisterService(session: AsyncSession, email: str, password: str, name: Optional[str] = None) -> Optional[str]:
     """Service to handle user registration."""

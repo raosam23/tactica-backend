@@ -1,12 +1,11 @@
+from typing import Dict, List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.document import Document
-from typing import List, Optional, Dict
-from app.services import (
-    scrape_wikipedia_articles,
-    scrape_rss_feeds,
-    chunk_documents,
-    generate_embeddings_batch
-)
+from app.services import (chunk_documents, generate_embeddings_batch,
+                          scrape_rss_feeds, scrape_wikipedia_articles)
+
 
 async def run_ingestion(
     session: AsyncSession,

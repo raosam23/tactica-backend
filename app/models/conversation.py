@@ -1,9 +1,11 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, List
-from sqlalchemy import UUID, Column, DateTime, ForeignKey, Text
+from typing import List, Optional
+
+from sqlalchemy import UUID, Column, DateTime, ForeignKey
 from sqlalchemy.sql import func
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
+
 
 class Conversation(SQLModel, table=True):
     """Represents a conversation in the database."""

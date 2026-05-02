@@ -1,12 +1,14 @@
 import uuid
-from app.models.message import Role as RoleType
-from app.services.conversation_service import GetConversationService
-from app.schemas.message import MessageCreate, MessageResponse
-from app.models import Message, Conversation, User
-from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
 from typing import List
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+from app.models import Message, User
+from app.models.message import Role as RoleType
+from app.schemas.message import MessageResponse
+from app.services.conversation_service import GetConversationService
+
 
 async def GetMessagesService(session: AsyncSession, user: User, conversation_id: uuid.UUID) -> List[MessageResponse]:
     """Service to retrieve all messages for a conversation."""

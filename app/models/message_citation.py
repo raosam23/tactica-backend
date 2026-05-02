@@ -1,7 +1,9 @@
 import uuid
 from typing import Optional
-from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, ForeignKey, UUID
+
+from sqlalchemy import UUID, Column, ForeignKey
+from sqlmodel import Field, Relationship, SQLModel
+
 
 class MessageCitation(SQLModel, table=True):
     """Represents a citation for a message in the database."""

@@ -1,6 +1,7 @@
-from app.services.scraper_service import scrape_wikipedia_articles, scrape_rss_feeds
 from app.services.chunker_service import chunk_documents
 from app.services.embedding_service import generate_embeddings_batch
+from app.services.scraper_service import (scrape_rss_feeds,
+                                          scrape_wikipedia_articles)
 
 __all__ = [
     "scrape_wikipedia_articles",

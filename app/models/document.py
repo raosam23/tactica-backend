@@ -1,12 +1,15 @@
 import uuid
-from typing import Optional, List, Any, Dict
-from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import ARRAY, Text, Column, DateTime, String, text
-from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import JSONB
-from pgvector.sqlalchemy import Vector
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import ARRAY, Column, DateTime, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.sql import func
+from sqlmodel import Field, Relationship, SQLModel
+
 from app.core.config import settings
+
 
 class Document(SQLModel, table=True):
     """Represents a document in the database."""

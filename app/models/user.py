@@ -1,9 +1,11 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, DateTime, String, Text
+
+from sqlalchemy import Column, DateTime
 from sqlalchemy.sql import func
+from sqlmodel import Field, SQLModel
+
 
 class User(SQLModel, table=True):
     """Represents a user in the database."""

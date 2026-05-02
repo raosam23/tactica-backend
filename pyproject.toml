@@ -25,3 +25,8 @@ dependencies = [
     "uvicorn[standard]>=0.46.0",
     "websockets>=16.0",
 ]
+[tool.isort]
+known_first_party = ["app"]
+
+[tool.ruff]
+src = ["app"]

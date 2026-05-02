@@ -1,9 +1,11 @@
 import logging
-logger = logging.getLogger(__name__)
+from typing import List
 
 from openai import AsyncOpenAI
-from typing import List
+
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 

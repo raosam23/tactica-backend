@@ -1,12 +1,14 @@
 import uuid
-from fastapi import APIRouter, Depends, status
+from typing import List
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_200_OK
-from app.services.message_service import GetMessagesService, CreateMessageService
-from app.schemas.message import MessageCreate, MessageResponse
+
 from app.db.database import get_session
+from app.schemas.message import MessageResponse
+from app.services.message_service import GetMessagesService
 from app.utils.security import get_current_user
-from typing import List
 
 router = APIRouter()
 
