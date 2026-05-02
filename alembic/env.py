@@ -1,10 +1,16 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
 from alembic import context
+from app.models import (Conversation, ConversationMemory,  # noqa: F401
+                        Document, Message, MessageCitation, User)
+
+load_dotenv()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -19,7 +25,8 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = SQLModel.metadata # I added this
+
+target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -63,7 +70,7 @@ def do_run_migrations(connection):
 async def run_async_migrations():
     """Create async engine and run migrations through a synchronous connection."""
     connectable = create_async_engine(
-        config.get_main_option("sqlalchemy.url"),
+        os.environ["DATABASE_URL"],
         connect_args={
             "ssl": True,
         },

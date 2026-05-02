@@ -31,3 +31,4 @@ class Conversation(SQLModel, table=True):
         )
     )
     messages: List["Message"] = Relationship(back_populates="conversation") # type: ignore
+    memories: List["ConversationMemory"] = Relationship(back_populates="conversation") # type: ignore

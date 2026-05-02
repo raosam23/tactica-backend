@@ -14,6 +14,8 @@ from app.core.config import settings
 class ConversationMemory(SQLModel, table=True):
     """Conversation-scoped vector memory for retrieval."""
 
+    __tablename__ = "conversation_memory"
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     conversation_id: uuid.UUID = Field(
         sa_column=Column(UUID(as_uuid=True), ForeignKey("conversation.id"), nullable=False, index=True)

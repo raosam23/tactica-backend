@@ -1,4 +1,5 @@
 from app.models.conversation import Conversation
+from app.models.conversation_memory import ConversationMemory
 from app.models.document import Document
 from app.models.message import Message
 from app.models.message_citation import MessageCitation
@@ -9,5 +10,6 @@ __all__ = [
     "User",
     "Conversation",
     "Message",
-    "MessageCitation"
+    "MessageCitation",
+    "ConversationMemory",
 ]
