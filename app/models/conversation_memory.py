@@ -18,7 +18,7 @@ class ConversationMemory(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     conversation_id: uuid.UUID = Field(
-        sa_column=Column(UUID(as_uuid=True), ForeignKey("conversation.id"), nullable=False, index=True)
+        sa_column=Column(UUID(as_uuid=True), ForeignKey("conversation.id", ondelete="CASCADE"), nullable=False, index=True)
     )
     content: str = Field(sa_column=Column(Text, nullable=False))
     embedding: Any = Field(sa_column=Column(Vector(settings.VECTOR_DIMENSION), nullable=False))

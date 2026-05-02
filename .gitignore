@@ -57,3 +57,6 @@ coverage.xml
 # mypy / type checking
 .mypy_cache/
 .dmypy.json
+
+# Ruff
+.ruff_cache/

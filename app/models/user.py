@@ -1,10 +1,10 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import Column, DateTime
 from sqlalchemy.sql import func
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Relationship
 
 
 class User(SQLModel, table=True):
@@ -22,3 +22,4 @@ class User(SQLModel, table=True):
             nullable=False
         )
     )
+    conversations: List["Conversation"] = Relationship(back_populates = "user") # type: ignore

@@ -13,12 +13,12 @@ class MessageCitation(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     message_id: uuid.UUID = Field(sa_column=Column(
         UUID(as_uuid=True),
-        ForeignKey("message.id"),
+        ForeignKey("message.id", ondelete="CASCADE"),
         nullable=False,
     ))
     document_id: uuid.UUID = Field(sa_column=Column(
         UUID(as_uuid=True),
-        ForeignKey("document.id"),
+        ForeignKey("document.id", ondelete="CASCADE"),
         nullable=False,
     ))
     relevance_score: Optional[float] = Field(default=None)
