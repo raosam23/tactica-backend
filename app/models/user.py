@@ -1,10 +1,10 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import List, Optional
 
 from sqlalchemy import Column, DateTime
 from sqlalchemy.sql import func
-from sqlmodel import Field, SQLModel, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 
 class User(SQLModel, table=True):
