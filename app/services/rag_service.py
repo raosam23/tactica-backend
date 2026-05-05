@@ -1,7 +1,8 @@
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -10,7 +11,7 @@ from app.models import ConversationMemory, Document
 from app.services.embedding_service import generate_embedding
 
 
-async def SearchDocumentsService(session: AsyncSession, query: str, sport: Optional[str] = None, limit: int = 5) -> List[Document]:
+async def SearchDocumentsService(session: AsyncSession, query: str, sport: Optional[str] = None, limit: int = 5) -> List[Tuple[Document, float]]:
     """
     Search for documents based on a query and optional sport filter.
     
@@ -20,7 +21,7 @@ async def SearchDocumentsService(session: AsyncSession, query: str, sport: Optio
         sport (Optional[str]): An optional filter for the sport type.
         limit (int): The maximum number of results to return.
     Returns:
-        List[Document]: A list of documents matching the search criteria.
+        List[Tuple[Document, float]]: A list of tuples containing documents and their similarity scores.
     """
     if not query.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Query cannot be empty")
@@ -28,9 +29,10 @@ async def SearchDocumentsService(session: AsyncSession, query: str, sport: Optio
         embeddings: List[float] = await generate_embedding(query)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to generate embeddings: {str(e)}")
+    distance = Document.embedding.cosine_distance(embeddings)
     statement = (
-        select(Document)
-        .order_by(Document.embedding.cosine_distance(embeddings))
+        select(Document, distance.label("score"))
+        .order_by(distance)
         .limit(limit)
     )
     if sport:
@@ -39,7 +41,7 @@ async def SearchDocumentsService(session: AsyncSession, query: str, sport: Optio
         results = await session.execute(statement)
     except SQLAlchemyError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {str(err)}")
-    return results.scalars().all()
+    return results.all()
 
 async def SearchConversationMemoryService(session: AsyncSession, conversation_id: uuid.UUID, query: str, limit: int = 5) -> List[ConversationMemory]:
     """
@@ -71,7 +73,7 @@ async def SearchConversationMemoryService(session: AsyncSession, conversation_id
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {str(err)}")
     return results.scalars().all()
 
-async def AddConversationMemoryService(session: AsyncSession, conversation_id: uuid.UUID, content: str, source_type: str, metadata: Optional[Dict[Any, Any]]) -> ConversationMemory:
+async def AddConversationMemoryService(session: AsyncSession, conversation_id: uuid.UUID, content: str, source_type: str, metadata: Optional[Dict[Any, Any]]) -> None:
     """
     Add a new entry to the conversation memory.
     
@@ -82,7 +84,7 @@ async def AddConversationMemoryService(session: AsyncSession, conversation_id: u
         source_type (str): The source type of the memory entry (e.g., user_statement, ai_response, fact, story, etc.).
         metadata (Optional[Dict[Any, Any]]): Additional metadata for the memory entry.
     Returns:
-        ConversationMemory: The newly created conversation memory entry.    
+        None  
     """
     if not content.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Content cannot be empty")
@@ -90,17 +92,16 @@ async def AddConversationMemoryService(session: AsyncSession, conversation_id: u
         embeddings = await generate_embedding(content)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to generate embeddings: {str(e)}")
-    memory_entry = ConversationMemory(
+    statement = pg_insert(ConversationMemory).values(
+        id=uuid.uuid4(),
         conversation_id=conversation_id,
         content=content,
         source_type=source_type,
         metadata_=metadata,
         embedding=embeddings
-    )
-    session.add(memory_entry)
+    ).on_conflict_do_nothing()
     try:
+        await session.execute(statement)
         await session.commit()
-        await session.refresh(memory_entry)
     except SQLAlchemyError as err:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {str(err)}")
-    return memory_entry

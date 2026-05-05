@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     VECTOR_DIMENSION: int = 1536
+    """CORS configuration."""
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000",]
     
     class Config:
         env_file = ".env"

@@ -15,3 +15,9 @@ class ConversationResponse(BaseModel):
     title: Optional[str] = Field(default=None, description="The title of the conversation")
     created_at: datetime = Field(description="The timestamp when the conversation was created")
     updated_at: datetime = Field(description="The timestamp when the conversation was last updated")
+
+class ChatRequest(BaseModel):
+    message: str = Field(description="The user's message to send to the sports pundit chatbot")
+
+class ChatResponse(BaseModel):
+    message: str = Field(description="The sports pundit chatbot's response to the user's message")

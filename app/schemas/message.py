@@ -6,9 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.message import Role as RoleType
 
 
-class MessageCreate(BaseModel):
-    content: str = Field(description="The content of the message")
-
 class MessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID = Field(description="The unique identifier of the message")
