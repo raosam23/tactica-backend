@@ -36,10 +36,13 @@ async def scrape_wikipedia_articles(
 
     results = []
     for page in data["query"]["pages"].values():
+        content = page.get("extract", "")
+        if not content:
+            continue
         tags = page["title"].lower().split()
         results.append({
             "title": page["title"],
-            "content": page["extract"],
+            "content": content,
             "url": f"https://en.wikipedia.org/wiki/{page['title'].replace(' ', '_')}",
             "source": "wikipedia",
             "sport": sport,

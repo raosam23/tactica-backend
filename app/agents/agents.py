@@ -6,7 +6,7 @@ from autogen_core.tools import FunctionTool
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.tools import make_tools
+from app.agents.tools import make_tools, search_wikipedia
 
 
 async def create_pundit_agents(
@@ -101,12 +101,18 @@ async def create_pundit_agents(
 
 def create_pipeline_agents(model_client: OpenAIChatCompletionClient) -> Dict[str, AssistantAgent]:
 
+    guardrail_agent_tools = [
+        FunctionTool(search_wikipedia, name="search_wikipedia", description="Use this tool when you are uncertain whether whethter a person, team, event or topic is sport-related. Pass the name or topic as the query to this tool, and it will return relevant information that can help you determine if it's sports-related or not.")
+    ]
+
     guardrail_agent = AssistantAgent(
         name="GuardrailAgent",
         model_client=model_client,
+        tools=guardrail_agent_tools,
         system_message="You are a sport topic guardrail." \
         "Your only job is to check if the user's message is related to sports. If it is sports-related, respond with exactly: SPORTS" \
         "If it is not sports-related, respond with exactly: NOT_SPORTS" \
+        "If you are uncertain, whether a name or topic is sports-related, use the search_wikipedia tool to look it up, then decide based on the information you find." \
         "DO NOT RESPOND WITH ANYTHING OTHER THAN THE EXACT WORDS 'SPORTS' OR 'NOT_SPORTS' WITHOUT ANY ADDITIONAL TEXT OR EXPLANATION.",
     )
 

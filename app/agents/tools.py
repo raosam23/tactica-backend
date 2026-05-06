@@ -7,6 +7,7 @@ from app.services.ingestion_service import run_ingestion
 from app.services.rag_service import (AddConversationMemoryService,
                                       SearchConversationMemoryService,
                                       SearchDocumentsService)
+from app.services.scraper_service import scrape_wikipedia_articles
 
 
 def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optional[str] = None) -> Tuple[Dict[str, Callable[..., str]], List]:
@@ -232,3 +233,21 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
         "get_historical_parallel": get_historical_parallel,
         "add_memory": add_memory,
     }, cited_documents)
+
+async def search_wikipedia(query: str) -> str:
+    """Search Wikipedia for a person, team, event, or topic to determine if it is sports-related.
+
+    Use this tool when you are uncertain whether a name or topic is sports-related.
+    Pass the name or topic directly as the query (e.g., "Vaibhav Suryavanshi", "IPL 2024", "Boca Juniors").
+
+    Args:
+        query: The name of a person, team, event, or topic to look up on Wikipedia.
+
+    Returns:
+        A short Wikipedia summary of the topic, or a fallback message if no article is found.
+    """
+    results = await scrape_wikipedia_articles([query])
+    if not results:
+        return "No relevant Wikipedia articles found."
+    response = results[0].get("content", "")[:500]
+    return response
