@@ -27,12 +27,13 @@ async def run_ingestion(
     """
     # --- Step 1: Scraping contents from Wikipedia and RSS feeds ---
     wiki_docs = await scrape_wikipedia_articles(wiki_titles, sport)
-    rss_docs = scrape_rss_feeds(rss_urls, sport)
+    rss_docs = await scrape_rss_feeds(rss_urls, sport)
 
     all_docs = wiki_docs + rss_docs
 
     # --- Step 2: Chunking documents while preserving metadata ---
     chunks = chunk_documents(all_docs, chunk_size, chunk_overlap)
+    chunks = [chunk for chunk in chunks if chunk.get("content", "").strip()] # Filter out empty chunks
 
     # --- Step 3: Embedding chunks ---
     texts = [chunk["content"] for chunk in chunks]

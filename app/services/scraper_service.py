@@ -18,7 +18,9 @@ async def scrape_wikipedia_articles(
     Returns:
         List[Dict[str, Any]]: A List of Dictionaries with title, content, url, source, sport, tags
     """
-
+    headers = {
+        "User-Agent": "Tactica/1.0 (sports chatbot; contact@tactica.com)"
+    }
     titles_param = "|".join(titles)
     url = "https://en.wikipedia.org/w/api.php"
     params = {
@@ -30,7 +32,7 @@ async def scrape_wikipedia_articles(
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(url, params=params)
+        response = await client.get(url, params=params, headers=headers)
         response.raise_for_status()
         data = response.json()
 
@@ -51,7 +53,7 @@ async def scrape_wikipedia_articles(
     return results
 
 
-def scrape_rss_feeds(
+async def scrape_rss_feeds(
     urls: List[str],
     sport: Optional[str] = None
 ) -> List[Dict[str, Any]]:

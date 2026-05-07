@@ -16,6 +16,7 @@ dependencies = [
     "greenlet>=3.4.0",
     "httpx>=0.28.1",
     "lxml>=6.1.0",
+    "mcp>=1.27.0",
     "openai>=2.32.0",
     "pgvector>=0.4.2",
     "pydantic-settings>=2.14.0",

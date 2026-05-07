@@ -8,6 +8,7 @@ from app.services.rag_service import (AddConversationMemoryService,
                                       SearchConversationMemoryService,
                                       SearchDocumentsService)
 from app.services.scraper_service import scrape_wikipedia_articles
+from app.core.config import SPORT_RSS_FEEDS
 
 
 def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optional[str] = None) -> Tuple[Dict[str, Callable[..., str]], List]:
@@ -174,10 +175,11 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             A numbered plain-text list of relevant snippets discovered after
             ingestion, or a fallback message when nothing relevant is found.
         """
+        rss_urls = SPORT_RSS_FEEDS.get(sport, SPORT_RSS_FEEDS["general"])
         await run_ingestion(
             session=session,
             wiki_titles=[query],
-            rss_urls=[],
+            rss_urls=rss_urls,
             sport=sport
         )
         search_results = await SearchDocumentsService(session, query, sport=sport, limit=5)

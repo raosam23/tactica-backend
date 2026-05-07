@@ -13,7 +13,8 @@ from app.models.user import User
 from app.services.message_service import (CreateMessageCitationService,
                                           CreateMessageService,
                                           GetMessagesService)
-
+from app.services.ingestion_service import run_ingestion
+from app.core.config import SPORT_RSS_FEEDS
 
 async def run_chat_pipeline(
     session: AsyncSession,
@@ -62,6 +63,16 @@ async def run_chat_pipeline(
         )
     else:
         task = user_message
+
+    topic_extractor_result = await pipeline_agents["topic_extractor_agent"].run(task=user_message)
+    extracted_topic = topic_extractor_result.messages[-1].content.strip()
+    rss_feeds = SPORT_RSS_FEEDS.get(detected_sport, SPORT_RSS_FEEDS["general"])
+    await run_ingestion(
+        session=session,
+        wiki_titles=[extracted_topic],
+        rss_urls=rss_feeds,
+        sport=detected_sport,
+    )
 
     result = await team.run(task=task)
 
