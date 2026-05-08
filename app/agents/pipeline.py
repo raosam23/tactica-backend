@@ -7,14 +7,15 @@ from sqlmodel import select
 from app.agents.agents import create_pipeline_agents, create_pundit_agents
 from app.agents.group_chat import create_pundit_team
 from app.agents.model_client import create_model_client
+from app.core.config import SPORT_RSS_FEEDS
 from app.models import Conversation
 from app.models.message import Role
 from app.models.user import User
+from app.services.ingestion_service import run_ingestion, check_if_existing_rss_docs_recent
 from app.services.message_service import (CreateMessageCitationService,
                                           CreateMessageService,
                                           GetMessagesService)
-from app.services.ingestion_service import run_ingestion
-from app.core.config import SPORT_RSS_FEEDS
+
 
 async def run_chat_pipeline(
     session: AsyncSession,
@@ -66,7 +67,10 @@ async def run_chat_pipeline(
 
     topic_extractor_result = await pipeline_agents["topic_extractor_agent"].run(task=user_message)
     extracted_topic = topic_extractor_result.messages[-1].content.strip()
-    rss_feeds = SPORT_RSS_FEEDS.get(detected_sport, SPORT_RSS_FEEDS["general"])
+    if await check_if_existing_rss_docs_recent(session):
+        rss_feeds = []
+    else:
+        rss_feeds = SPORT_RSS_FEEDS.get(detected_sport, SPORT_RSS_FEEDS["general"])
     await run_ingestion(
         session=session,
         wiki_titles=[extracted_topic],

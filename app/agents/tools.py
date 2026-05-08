@@ -3,12 +3,12 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.ingestion_service import run_ingestion
+from app.core.config import SPORT_RSS_FEEDS
+from app.services.ingestion_service import run_ingestion, check_if_existing_rss_docs_recent
 from app.services.rag_service import (AddConversationMemoryService,
                                       SearchConversationMemoryService,
                                       SearchDocumentsService)
 from app.services.scraper_service import scrape_wikipedia_articles
-from app.core.config import SPORT_RSS_FEEDS
 
 
 def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optional[str] = None) -> Tuple[Dict[str, Callable[..., str]], List]:
@@ -165,8 +165,9 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
         """Ingest fresh information for a topic, then search the updated knowledge base.
 
         Use this tool when the existing knowledge base may be missing the topic
-        or when fresher coverage is needed before answering. This tool first
-        ingests new content and then performs the same document retrieval flow.
+        or when fresher coverage is needed before answering. This tool always ingests
+        the Wikipedia article for the query. RSS feeds are only ingested if no recent
+        RSS documents (within the last hour) exist in the database, to avoid redundant ingestion.
 
         Args:
             query: The topic to ingest and then search for fresh evidence.
@@ -175,7 +176,10 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             A numbered plain-text list of relevant snippets discovered after
             ingestion, or a fallback message when nothing relevant is found.
         """
-        rss_urls = SPORT_RSS_FEEDS.get(sport, SPORT_RSS_FEEDS["general"])
+        if await check_if_existing_rss_docs_recent(session):
+            rss_urls = []
+        else:
+            rss_urls = SPORT_RSS_FEEDS.get(sport, SPORT_RSS_FEEDS["general"])
         await run_ingestion(
             session=session,
             wiki_titles=[query],

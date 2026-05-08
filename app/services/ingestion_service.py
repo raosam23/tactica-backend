@@ -1,10 +1,13 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from app.models.document import Document
 from app.services import (chunk_documents, generate_embeddings_batch,
                           scrape_rss_feeds, scrape_wikipedia_articles)
+
+from datetime import datetime, timedelta, timezone
 
 
 async def run_ingestion(
@@ -20,14 +23,16 @@ async def run_ingestion(
     Args:
         session (AsyncSession): The database session to use for storing documents
         wiki_titles (List[str]): A list of Wikipedia article titles to scrape
-        rss_urls (List[str]): A list of RSS feed URLs to scrape
+        rss_urls (List[str]): A list of RSS feed URLs to scrape. Pass an empty list to skip RSS scraping and only ingest Wikipedia articles
         sport (Optional[str]): An optional sport category to tag all articles with
         chunk_size (int): The maximum characters per chunk
         chunk_overlap (int): The number of overlapping characters between chunks
     """
     # --- Step 1: Scraping contents from Wikipedia and RSS feeds ---
     wiki_docs = await scrape_wikipedia_articles(wiki_titles, sport)
-    rss_docs = await scrape_rss_feeds(rss_urls, sport)
+    rss_docs: List[Any] =[]
+    if rss_urls:
+        rss_docs = await scrape_rss_feeds(rss_urls, sport)
 
     all_docs = wiki_docs + rss_docs
 
@@ -68,3 +73,23 @@ async def run_ingestion(
         "embeddings": len(all_embeddings),
         "stored": len(chunks),
     }
+
+
+async def check_if_existing_rss_docs_recent(
+    session: AsyncSession,
+) -> bool:
+    """Check if there are recent RSS documents in the database, within the last hour.
+    Args:
+        session (AsyncSession): The database session to use for querying documents
+    Returns:
+        bool: True if there are recent RSS documents, False otherwise."""
+    query_result = await session.execute(
+        select(Document).where(Document.source != "wikipedia").order_by(Document.created_at.desc()).limit(1)
+    )
+    document = query_result.scalars().first()
+    if not document:
+        return False
+    # Check if the document is recent within the last 1 hour
+    if document.created_at < datetime.now(timezone.utc) - timedelta(minutes=60):
+        return False
+    return True

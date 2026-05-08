@@ -4,11 +4,10 @@ from typing import Dict, List, Optional, Tuple
 from autogen_agentchat.agents import AssistantAgent
 from autogen_core.tools import FunctionTool
 from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen_ext.tools.mcp import StdioServerParams, mcp_server_tools
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.tools import make_tools, search_wikipedia
-
-from autogen_ext.tools.mcp import StdioServerParams, mcp_server_tools
 from app.core.config import settings
 
 
