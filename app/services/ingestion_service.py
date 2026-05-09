@@ -1,4 +1,5 @@
-from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -6,8 +7,6 @@ from sqlmodel import select
 from app.models.document import Document
 from app.services import (chunk_documents, generate_embeddings_batch,
                           scrape_rss_feeds, scrape_wikipedia_articles)
-
-from datetime import datetime, timedelta, timezone
 
 
 async def run_ingestion(

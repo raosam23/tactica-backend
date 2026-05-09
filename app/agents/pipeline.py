@@ -1,4 +1,3 @@
-import logging
 import uuid
 from typing import Optional
 
@@ -12,7 +11,8 @@ from app.core.config import SPORT_RSS_FEEDS
 from app.models import Conversation
 from app.models.message import Role
 from app.models.user import User
-from app.services.ingestion_service import run_ingestion, check_if_existing_rss_docs_recent
+from app.services.ingestion_service import (check_if_existing_rss_docs_recent,
+                                            run_ingestion)
 from app.services.message_service import (CreateMessageCitationService,
                                           CreateMessageService,
                                           GetMessagesService)
@@ -78,9 +78,6 @@ async def run_chat_pipeline(
         rss_urls=rss_feeds,
         sport=detected_sport,
     )
-
-    logging.getLogger("autogen_agentchat").setLevel(logging.DEBUG)
-    logging.basicConfig(level=logging.DEBUG)
 
     result = await team.run(task=task)
 

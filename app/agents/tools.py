@@ -4,7 +4,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import SPORT_RSS_FEEDS
-from app.services.ingestion_service import run_ingestion, check_if_existing_rss_docs_recent
+from app.services.ingestion_service import (check_if_existing_rss_docs_recent,
+                                            run_ingestion)
 from app.services.rag_service import (AddConversationMemoryService,
                                       SearchConversationMemoryService,
                                       SearchDocumentsService)
