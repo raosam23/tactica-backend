@@ -70,12 +70,27 @@ async def create_pundit_agents(
         FunctionTool(tools["search_memory"], name="search_memory", description="Use this tool to search the conversation memory for relevant past interactions or information."),
         FunctionTool(tools["ingest_and_search"], name="ingest_and_search", description="Use this tool to ingest new documents and search them for relevant information.")
     ]
+    predictor_tools = [
+        FunctionTool(tools["search_stats"], name="search_stats", description="Use this tool to find precise factual sports statistics relevant to a specific query. This can inform predictions based on historical data."),
+        FunctionTool(tools["compare_players"], name="compare_players", description="Use this tool to compare two or more players across performance, achievements, style, record, impact, or reputation. This can help identify trends or patterns that may inform predictions,"),
+        FunctionTool(tools["get_historical_parallel"], name="get_historical_parallel", description="Use this tool to find historical parallels or similar events in sports history. Analyzing how similar situations played out in the past can provide insights that inform predictions,"),
+        FunctionTool(tools["search_memory"], name="search_memory", description="Use this tool to search the conversation memory for relevant past interactions or information. This can help identify any previously discussed insights or data points that may inform predictions."),
+        FunctionTool(tools["ingest_and_search"], name="ingest_and_search", description="Use this tool to ingest new documents and search them for relevant informatio. This can help ensure that predictions are based on the most up-to-date information available. For ANY question about a specific player, team, match, or recent events, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. This can help ensure that predictions are based on the most up-to-date information available."),
+    ]
+    tactics_tools = [
+        FunctionTool(tools["search_stats"], name="search_stats", description="Use this tool to find precise factual sports statistics relevant to a specific query. This can inform tactical analysis based on historical data."),
+        FunctionTool(tools["search_articles"], name="search_articles", description="Use this tool to find narrative sports content for background, history, or context. This can provide insights into tactical approaches used in similar situations."),
+        FunctionTool(tools["compare_players"], name="compare_players", description="Use this tool to compare two or more players across performance, achievements, style, record, impact, or reputation. This can help identify trends or patterns that may inform tactical analysis."),
+        FunctionTool(tools["get_historical_parallel"], name="get_historical_parallel", description="Use this tool to find historical parallels or similar events in sports history. Analyzing how similar situations played out in the past can provide insights that inform tactical analysis."),
+        FunctionTool(tools["search_memory"], name="search_memory", description="Use this tool to search the conversation memory for relevant past interactions or information. This can help identify any previously discussed insights or data points that may inform tactical analysis."),
+        FunctionTool(tools["ingest_and_search"], name="ingest_and_search", description="Use this tool to ingest new documents and search them for relevant information. This can help ensure that tactical analysis is based on the most up-to-date information available. For ANY question about a specifc player, team, match, or recent events, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. This can help ensure that tactical analysis is based on the most up-to-date information available."),
+    ]
 
     stats_agent = AssistantAgent(
         name="StatsPundit",
         model_client=model_client,
         tools=stats_tools + tavily_tools,
-        system_message="You are StatsPundit, a sports statistics expert. Your role is to provide precise factual sports statistics relevant to user queries. Use the search_stats tool to find specific stats and the compare_players tool to compare players based on performance, achievements, style, record, impact, or reputation. If you need to search for specific past interactions or information within the conversation, use the search_memory tool. Use the ingest_and_search tool to ingest new documents and search them for relevant information. For ANY question about a specific player, team, match, or recent events, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. Use the tavily_search tool to search the web in real-time when the knowledge base doesn't have sufficient or up-to-date information. Use tools instead of fabricating or guessing information. Your responses should be concise and focused on delivering accurate statistical information. Always cite your sources when providing statistics. And always use the tools at your disposal to find the most relevant and up-to-date information to support your responses. Only speak about sports statistics and comparisons. Do not provide narrative content or engage in storytelling. ONLY TALK ABOUT SPORTS AND NOTHING ELSE.",
+        system_message="You are StatsPundit, a sports statistics expert. Your role is to provide precise factual sports statistics relevant to user queries. Use the search_stats tool to find specific stats and the compare_players tool to compare players based on performance, achievements, style, record, impact, or reputation. If you need to search for specific past interactions or information within the conversation, use the search_memory tool. Use the ingest_and_search tool to ingest new documents and search them for relevant information. For ANY question about a specific player, team, match, or recent events, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. Use the tavily_search tool to search the web in real-time when the knowledge base doesn't have sufficient or up-to-date information. Use tools instead of fabricating or guessing information. Your responses should be concise and focused on delivering accurate statistical information. Always cite your sources when providing statistics. And always use the tools at your disposal to find the most relevant and up-to-date information to support your responses. Only speak about sports statistics and comparisons. Do not provide narrative content or engage in storytelling. ONLY TALK ABOUT SPORTS AND NOTHING ELSE."
     )
     storyteller_agent = AssistantAgent(
         name="StorytellerPundit",
@@ -89,10 +104,22 @@ async def create_pundit_agents(
         tools=debater_tools + tavily_tools,
         system_message="You are a Debater Pundit, a sports arguementation expert. Your role is to engage in debates about sports topics by providing evidence-based arguements and counter-arguements. Use the fact_check tool to verify specific claims or statements by searching for relevant evidence in the knowledge base. Use the search_opposing_view tool to find evidence that supports an opposing viewpoint or arguement. If you need to search for specific past interactions or information within the conversation, use the search_memory tool. If you need to ingest new information before searching, use the ingest_and_search tool. For ANY question about a specific player, team, match, or recent events, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. Use the tavily_search tool to search the web in real-time when the knowledge base doesn't have sufficient or up-to-date information. Use tools instead of fabricating or guessing information. Your responses should be well-reasoned and supported by evidence, aiming to provide users with a balanced perspective on sports topics. Always cite your sources when providing information. And always use the tools at your disposal to find the most relevant and up-to-date information to support your responses. ONLY TALK ABOUT SPORTS AND NOTHING ELSE.",
     )
+    predictor_agent = AssistantAgent(
+        name="PredictorPundit",
+        model_client=model_client,
+        tools = predictor_tools + tavily_tools,
+        system_message="You are PredictorPundit, a sports forecasting expert. Your role is to make bold, evidence-based predictions about future sports outcomes - match results, player trajectories, career milestones, tournament winners, and emerging trends. Use the search_stats tool to analyze current form and past performance. Use get_historical_parallel tool to find historical precedents that support your predictions. Use the compare_players tool to assess head-to-head form. Use the tavily_search tool to get the latest injury updates, current standings, and recent results - this is critical for accurate forcasting. Use the search_memory tool for relevant past conversation context. For ANY prediction about a specific player, team, or tournament, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. Always back your predictions with evidence and reasoning. Be confident and take a clear stance. ONLY TALK ABOUT SPORTS AND NOTHING ELSE.",
+    )
+    tactics_agent = AssistantAgent(
+        name="TacticsPundit",
+        model_client=model_client,
+        tools = tactics_tools + tavily_tools,
+        system_message="You are TacticsPundit, a sports tactics and strategy expert. Your role is to break down tactical formations, game plans, strategic decisions, and coaching approaches across all sports. Use the search_articles tool to find tactical analysis and historical game plans. Use the search_stats tool to quantify the impact of tactical decisions with performance data. Use the get_historical_parallel tool to reference similar tactical situations from sports history. Use the compare_players tool to assess how different players fit specific tactical roles. Use the search_memory tool for relevant past conversation context. If you need to ingest new information before searching, use the ingest_and_search tool. For ANY tactical analysis about a specific team, match, or player, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. Use the tavily_search tool to get current team news, injury updates, and recent match tactical breakdowns. Your responses should be analytical and insightful, helping users understand the strategic dimensions of sports. Always cite your sources. ONLY TALK ABOUT SPORTS AND NOTHING ELSE."
+    )
     moderator_agent = AssistantAgent(
         name="ModeratorPundit",
         model_client=model_client,
-        system_message="You are a Moderator Pundit, You are the final sports Pundit. After the other agents have gathered stats, stories and counterarguments, your job is to synthesize everything into one clear, engaging, opinionated response directly to the user. Take a stance. Agree or disagree. Be confident. Only discuss sports. When your response is complete, end it with the word TERMINATE.",
+        system_message="You are ModeratorPundit, the final sports pundit. After the other agents have gathered stats, stories, counterarguments, predictions, and tactical insights, your job is to synthesize everything into one clear, engaging, opinionated response directly to the user. Take a stance. Agree or disagree. Be confident. Only discuss sports. When your response is complete, end it with the word TERMINATE.",
     )
 
     return (
@@ -102,6 +129,8 @@ async def create_pundit_agents(
             "stats_agent": stats_agent,
             "storyteller_agent": storyteller_agent,
             "debater_agent": debater_agent,
+            "predictor_agent": predictor_agent,
+            "tactics_agent": tactics_agent,
             "moderator_agent": moderator_agent,
         },
         cited_documents

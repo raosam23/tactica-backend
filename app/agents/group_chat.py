@@ -14,12 +14,14 @@ async def create_pundit_team(
     stats_agent = agents["stats_agent"]
     storyteller_agent = agents["storyteller_agent"]
     debater_agent = agents["debater_agent"]
+    predictor_agent = agents["predictor_agent"]
+    tactics_agent = agents["tactics_agent"]
     moderator_agent = agents["moderator_agent"]
 
-    termination = TextMentionTermination("TERMINATE") | MaxMessageTermination(20)
+    termination = TextMentionTermination("TERMINATE") | MaxMessageTermination(40)
 
     team = SelectorGroupChat(
-        participants=[stats_agent, storyteller_agent, debater_agent, moderator_agent],
+        participants=[stats_agent, storyteller_agent, debater_agent, predictor_agent, tactics_agent, moderator_agent],
         model_client=model_client,
         termination_condition=termination
     )

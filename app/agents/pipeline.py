@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Optional
 
@@ -77,6 +78,9 @@ async def run_chat_pipeline(
         rss_urls=rss_feeds,
         sport=detected_sport,
     )
+
+    logging.getLogger("autogen_agentchat").setLevel(logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG)
 
     result = await team.run(task=task)
 
