@@ -44,10 +44,11 @@ Tactica is the **backend** of a 1-on-1 sports chatbot. A logged-in user opens a 
 What makes it different from a plain LLM chat:
 
 - **Retrieval-augmented.** Answers are grounded in real documents stored as embeddings in PostgreSQL via `pgvector`.
-- **Live ingestion.** When the knowledge base doesn't know about a topic, the agent can **scrape Wikipedia / RSS, chunk, embed and store** it on the fly — then answer using fresh evidence.
-- **Multi-agent debate.** Behind a single "pundit" persona, four specialist AutoGen agents (Stats, Storyteller, Debater, Moderator) collaborate before the user sees one polished answer.
+- **Live ingestion.** Before the pundit team runs, the pipeline pre-ingests the user's topic from **Wikipedia + sport-specific RSS feeds** so the knowledge base is always populated with fresh evidence. Agents can also pull more on demand mid-conversation, with a 60-minute RSS recency check to avoid redundant scraping.
+- **Real-time web fallback.** When the knowledge base still lacks coverage, pundits can call **Tavily** (via MCP) for live web search.
+- **Multi-agent debate.** Behind a single "pundit" persona, **five specialist AutoGen agents** (Stats, Storyteller, Debater, Predictor, Tactics) collaborate before a Moderator synthesizes one polished answer. A `candidate_func` enforces turn-taking so each specialist speaks at most once.
 - **Conversation-scoped memory.** A separate `conversation_memory` vector table remembers facts, opinions and conclusions per chat thread.
-- **Sports-only.** A guardrail agent rejects non-sports prompts before any heavy work is done.
+- **Sports-only.** A guardrail agent rejects non-sports prompts before any heavy work is done — and can verify uncertain names against Wikipedia before deciding.
 
 > ⚠️ **Frontend status:** This repo is backend-only. A Next.js frontend is planned but not yet started.
 
@@ -60,6 +61,7 @@ When a user sends a message to `POST /api/conversations/{id}/chat`, this is what
 ```
                 ┌──────────────────────────┐
    user msg →   │  GuardrailAgent          │  → "NOT_SPORTS" → polite refusal
+                │  (Wikipedia tool)        │
                 └────────────┬─────────────┘
                              ▼ "SPORTS"
                 ┌──────────────────────────┐
@@ -68,13 +70,23 @@ When a user sends a message to `POST /api/conversations/{id}/chat`, this is what
                              ▼
             persist user msg, load last 10 messages as context
                              ▼
+                ┌──────────────────────────┐
+                │  TopicExtractorAgent     │  → main entity (e.g. "Lionel Messi")
+                └────────────┬─────────────┘
+                             ▼
+       Pre-ingestion: Wikipedia + sport-specific RSS feeds
+       (RSS skipped if a non-Wikipedia doc was ingested in the last 60 min)
+                             ▼
    ┌─────────────────────────────────────────────────────────┐
    │              SelectorGroupChat (AutoGen)                │
    │                                                         │
-   │   StatsPundit   StorytellerPundit   DebaterPundit       │
-   │        \              |                   /             │
-   │         └──────► ModeratorPundit ◄───────┘              │
-   │                  (says TERMINATE)                       │
+   │   Stats   Storyteller   Debater   Predictor   Tactics   │
+   │      \         \           |          /          /      │
+   │       └────────►  ModeratorPundit  ◄───────────┘      |
+   │                    (says TERMINATE)                     │
+   │                                                         │
+   │   candidate_func: each specialist speaks at most once,  │
+   │   Moderator forced after 3 specialists have contributed │
    └─────────────────────────────┬───────────────────────────┘
                                  ▼
               persist assistant msg + citations
@@ -86,7 +98,7 @@ When a user sends a message to `POST /api/conversations/{id}/chat`, this is what
                        return final answer
 ```
 
-**Termination:** the team stops when `ModeratorPundit` ends its message with `TERMINATE`, or after 20 messages.
+**Termination:** the team stops when `ModeratorPundit` ends its message with `TERMINATE`, or after 15 messages as a safety cap.
 
 ---
 
@@ -94,7 +106,7 @@ When a user sends a message to `POST /api/conversations/{id}/chat`, this is what
 
 ```
         ┌────────────────────────┐
-client → │   FastAPI (Uvicorn)    │
+client->│   FastAPI (Uvicorn)    │
         └──────────┬─────────────┘
                    │
         ┌──────────┴─────────────┐
@@ -123,21 +135,22 @@ client → │   FastAPI (Uvicorn)    │
 
 ## 🧰 Tech stack
 
-| Layer                  | Choice                                        |
-| ---------------------- | --------------------------------------------- |
-| Language               | Python 3.12+                                  |
-| API framework          | FastAPI (async)                               |
-| Server                 | Uvicorn                                       |
-| ORM / models           | SQLModel + SQLAlchemy async                   |
-| DB                     | PostgreSQL (Neon-compatible, SSL required)    |
-| Vector search          | `pgvector` (cosine distance, dim = 1536)      |
-| Migrations             | Alembic (async env)                           |
-| Auth                   | JWT (`python-jose`) + `bcrypt` password hash  |
-| LLM provider           | OpenAI (`gpt-4o-mini` by default)             |
-| Embeddings             | OpenAI `text-embedding-3-small`               |
-| Multi-agent framework  | Microsoft **AutoGen AgentChat**               |
-| Web ingestion          | Wikipedia API, RSS via `feedparser`, `httpx`  |
-| Package manager        | `uv`                                          |
+| Layer                 | Choice                                       |
+| --------------------- | -------------------------------------------- |
+| Language              | Python 3.12+                                 |
+| API framework         | FastAPI (async)                              |
+| Server                | Uvicorn                                      |
+| ORM / models          | SQLModel + SQLAlchemy async                  |
+| DB                    | PostgreSQL (Neon-compatible, SSL required)   |
+| Vector search         | `pgvector` (cosine distance, dim = 1536)     |
+| Migrations            | Alembic (async env)                          |
+| Auth                  | JWT (`python-jose`) + `bcrypt` password hash |
+| LLM provider          | OpenAI (`gpt-4o-mini` by default)            |
+| Embeddings            | OpenAI `text-embedding-3-small`              |
+| Multi-agent framework | Microsoft **AutoGen AgentChat**              |
+| Web ingestion         | Wikipedia API, RSS via `feedparser`, `httpx` |
+| Real-time web search  | **Tavily MCP** (`tavily-mcp` via stdio)      |
+| Package manager       | `uv`                                         |
 
 ---
 
@@ -201,14 +214,14 @@ backend/
 
 Six tables, all migrated via Alembic:
 
-| Table                 | Purpose                                                                           |
-| --------------------- | --------------------------------------------------------------------------------- |
-| `user`                | Accounts — email, bcrypt password hash, optional name                             |
-| `conversation`        | Chat threads, scoped to a user                                                    |
-| `message`             | Every user / assistant turn (`role` enum)                                         |
+| Table                 | Purpose                                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `user`                | Accounts — email, bcrypt password hash, optional name                                                |
+| `conversation`        | Chat threads, scoped to a user                                                                       |
+| `message`             | Every user / assistant turn (`role` enum)                                                            |
 | `message_citations`   | Many-to-many between assistant messages and the documents that informed them, with `relevance_score` |
-| `document`            | **Global RAG store** — text chunks + `VECTOR(1536)` embedding + sport tag + JSONB metadata |
-| `conversation_memory` | **Per-conversation memory** — extracted facts/opinions, embedded for vector lookup |
+| `document`            | **Global RAG store** — text chunks + `VECTOR(1536)` embedding + sport tag + JSONB metadata           |
+| `conversation_memory` | **Per-conversation memory** — extracted facts/opinions, embedded for vector lookup                   |
 
 Foreign keys use `ON DELETE CASCADE`, so deleting a conversation cleans up its messages and memory automatically.
 
@@ -249,11 +262,11 @@ This creates all six tables and enables the `pgvector` extension.
 uv run uvicorn app.main:app --reload
 ```
 
-| Surface         | URL                              |
-| --------------- | -------------------------------- |
-| Health check    | `http://127.0.0.1:8000/health`   |
-| Swagger UI      | `http://127.0.0.1:8000/docs`     |
-| ReDoc           | `http://127.0.0.1:8000/redoc`    |
+| Surface      | URL                            |
+| ------------ | ------------------------------ |
+| Health check | `http://127.0.0.1:8000/health` |
+| Swagger UI   | `http://127.0.0.1:8000/docs`   |
+| ReDoc        | `http://127.0.0.1:8000/redoc`  |
 
 ---
 
@@ -261,21 +274,22 @@ uv run uvicorn app.main:app --reload
 
 Loaded from `.env` via `pydantic-settings`.
 
-| Variable                      | Required | Default                                                | Notes                                          |
-| ----------------------------- | :------: | ------------------------------------------------------ | ---------------------------------------------- |
-| `APP_NAME`                    |          | `Tactica`                                              |                                                |
-| `APP_ENV`                     |          | `development`                                          |                                                |
-| `DEBUG`                       |          | `True`                                                 | Enables SQLAlchemy `echo`                      |
-| `DATABASE_URL`                |    ✅    | —                                                      | Must be `postgresql+asyncpg://...`             |
-| `SECRET_KEY`                  |    ✅    | —                                                      | JWT signing secret                             |
-| `ALGORITHM`                   |          | `HS256`                                                |                                                |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` |          | `30`                                                   |                                                |
-| `SALT_ROUNDS`                 |          | `12`                                                   | bcrypt cost                                    |
-| `OPENAI_API_KEY`              |    ✅    | —                                                      |                                                |
-| `OPENAI_MODEL`                |          | `gpt-4o-mini`                                          | Used by every agent                            |
-| `EMBEDDING_MODEL`             |          | `text-embedding-3-small`                               |                                                |
-| `VECTOR_DIMENSION`            |          | `1536`                                                 | Must match the embedding model                 |
-| `ALLOWED_ORIGINS`             |          | `["http://localhost:3000", "http://localhost:8000"]`   | CORS allowlist                                 |
+| Variable                      | Required | Default                                              | Notes                                     |
+| ----------------------------- | :------: | ---------------------------------------------------- | ----------------------------------------- |
+| `APP_NAME`                    |          | `Tactica`                                            |                                           |
+| `APP_ENV`                     |          | `development`                                        |                                           |
+| `DEBUG`                       |          | `True`                                               | Enables SQLAlchemy `echo`                 |
+| `DATABASE_URL`                |    ✅    | —                                                    | Must be `postgresql+asyncpg://...`        |
+| `SECRET_KEY`                  |    ✅    | —                                                    | JWT signing secret                        |
+| `ALGORITHM`                   |          | `HS256`                                              |                                           |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` |          | `30`                                                 |                                           |
+| `SALT_ROUNDS`                 |          | `12`                                                 | bcrypt cost                               |
+| `OPENAI_API_KEY`              |    ✅    | —                                                    |                                           |
+| `OPENAI_MODEL`                |          | `gpt-4o-mini`                                        | Used by every agent                       |
+| `EMBEDDING_MODEL`             |          | `text-embedding-3-small`                             |                                           |
+| `VECTOR_DIMENSION`            |          | `1536`                                               | Must match the embedding model            |
+| `TAVILY_API_KEY`              |    ✅    | —                                                    | Used by pundits via the Tavily MCP server |
+| `ALLOWED_ORIGINS`             |          | `["http://localhost:3000", "http://localhost:8000"]` | CORS allowlist                            |
 
 ### Example `.env`
 
@@ -295,6 +309,8 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 EMBEDDING_MODEL=text-embedding-3-small
 VECTOR_DIMENSION=1536
+
+TAVILY_API_KEY=tvly-...
 ```
 
 > The async engine is created with `connect_args={"ssl": "require"}`. Use a Postgres host that accepts SSL (Neon, Supabase, RDS, etc.).
@@ -311,99 +327,119 @@ Authorization: Bearer <jwt>
 
 ### Route map
 
-| Method | Path                                              | Auth | Purpose                                       |
-| :----: | ------------------------------------------------- | :--: | --------------------------------------------- |
-|  GET   | `/health`                                         |  ❌  | Liveness probe                                |
-|  POST  | `/api/auth/register`                              |  ❌  | Create user, return JWT                       |
-|  POST  | `/api/auth/login`                                 |  ❌  | Verify credentials, return JWT                |
-| DELETE | `/api/auth/me`                                    |  ✅  | Delete the current user's account             |
-|  POST  | `/api/conversations/`                             |  ✅  | Create a new conversation                     |
-|  GET   | `/api/conversations/`                             |  ✅  | List the current user's conversations         |
-|  GET   | `/api/conversations/{conversation_id}`            |  ✅  | Fetch a single conversation                   |
-| DELETE | `/api/conversations/{conversation_id}`            |  ✅  | Delete a conversation (cascades messages)     |
-|  POST  | `/api/conversations/{conversation_id}/chat`       |  ✅  | **Run the full multi-agent pipeline**         |
-|  GET   | `/api/conversations/{conversation_id}/messages`   |  ✅  | List all messages in a conversation           |
+| Method | Path                                            | Auth | Purpose                                   |
+| :----: | ----------------------------------------------- | :--: | ----------------------------------------- |
+|  GET   | `/health`                                       |  ❌  | Liveness probe                            |
+|  POST  | `/api/auth/register`                            |  ❌  | Create user, return JWT                   |
+|  POST  | `/api/auth/login`                               |  ❌  | Verify credentials, return JWT            |
+| DELETE | `/api/auth/me`                                  |  ✅  | Delete the current user's account         |
+|  POST  | `/api/conversations/`                           |  ✅  | Create a new conversation                 |
+|  GET   | `/api/conversations/`                           |  ✅  | List the current user's conversations     |
+|  GET   | `/api/conversations/{conversation_id}`          |  ✅  | Fetch a single conversation               |
+| DELETE | `/api/conversations/{conversation_id}`          |  ✅  | Delete a conversation (cascades messages) |
+|  POST  | `/api/conversations/{conversation_id}/chat`     |  ✅  | **Run the full multi-agent pipeline**     |
+|  GET   | `/api/conversations/{conversation_id}/messages` |  ✅  | List all messages in a conversation       |
 
 <details>
 <summary><strong>POST /api/auth/register</strong> — 201 Created</summary>
 
 Request:
+
 ```json
 { "email": "user@example.com", "password": "strong-password", "name": "Samarth" }
 ```
+
 Response:
+
 ```json
 { "access_token": "<jwt>", "token_type": "bearer" }
 ```
+
 </details>
 
 <details>
 <summary><strong>POST /api/auth/login</strong> — 200 OK</summary>
 
 Request:
+
 ```json
 { "email": "user@example.com", "password": "strong-password" }
 ```
+
 Response:
+
 ```json
 { "access_token": "<jwt>", "token_type": "bearer" }
 ```
+
 </details>
 
 <details>
 <summary><strong>DELETE /api/auth/me</strong> — 200 OK</summary>
 
 Response:
+
 ```json
 { "id": "uuid", "email": "user@example.com", "name": "Samarth" }
 ```
+
 </details>
 
 <details>
 <summary><strong>POST /api/conversations/</strong> — 201 Created</summary>
 
 Request (title is optional — if omitted, the `TitleAgent` will generate one after the first chat turn):
+
 ```json
 { "title": "Champions League Debate" }
 ```
+
 Response:
+
 ```json
 {
-  "id": "uuid",
-  "user_id": "uuid",
-  "title": "Champions League Debate",
-  "created_at": "2026-05-05T10:00:00Z",
-  "updated_at": "2026-05-05T10:00:00Z"
+    "id": "uuid",
+    "user_id": "uuid",
+    "title": "Champions League Debate",
+    "created_at": "2026-05-05T10:00:00Z",
+    "updated_at": "2026-05-05T10:00:00Z"
 }
 ```
+
 </details>
 
 <details>
 <summary><strong>GET /api/conversations/</strong> — 200 OK</summary>
 
 Response: an array of `ConversationResponse` objects.
+
 </details>
 
 <details>
 <summary><strong>GET /api/conversations/{conversation_id}</strong> — 200 OK</summary>
 
 Response: a single `ConversationResponse`. Returns 404 if the conversation does not belong to the caller.
+
 </details>
 
 <details>
 <summary><strong>DELETE /api/conversations/{conversation_id}</strong> — 200 OK</summary>
 
 Returns the deleted conversation. Cascades through `message`, `message_citations`, and `conversation_memory`.
+
 </details>
 
 <details>
 <summary><strong>POST /api/conversations/{conversation_id}/chat</strong> — 200 OK</summary>
 
 Request:
+
 ```json
 { "message": "Was Barcelona's 2011 team better than Manchester City's treble side?" }
 ```
+
 Response:
+
 ```json
 { "message": "<final pundit answer>" }
 ```
@@ -411,38 +447,41 @@ Response:
 What this endpoint actually does:
 
 1. Verifies the conversation belongs to the caller.
-2. Runs the **GuardrailAgent**. If the prompt is not sports-related, returns a polite refusal immediately.
+2. Runs the **GuardrailAgent** (Wikipedia-tooled). If the prompt is not sports-related, returns a polite refusal immediately.
 3. Runs the **SportDetectorAgent** to tag the query (e.g. `football`, `tennis`, or `general`).
-4. Loads the last 10 messages as context.
-5. Persists the user message.
-6. Spins up the four pundit agents and runs a **`SelectorGroupChat`** until `ModeratorPundit` says `TERMINATE` (or 20 messages elapse).
-7. Persists the assistant's final reply, plus citations into `message_citations`.
-8. Runs the **MemoryWriter** agent over the exchange to extract durable facts into `conversation_memory`.
-9. If the conversation has no title yet, runs the **TitleAgent**.
+4. Loads the last 10 messages as context, persists the user message.
+5. Runs the **TopicExtractorAgent** to extract the main sports entity (player, team, tournament).
+6. **Pre-ingests** the topic from Wikipedia + sport-specific RSS feeds before any pundit runs (RSS skipped if a non-Wikipedia document was ingested in the last 60 minutes).
+7. Spins up the five pundit agents and runs a **`SelectorGroupChat`** with a `candidate_func` that prevents repeats and forces `ModeratorPundit` after 3 specialists. Termination fires on `TERMINATE` or after 15 messages as a safety cap.
+8. Persists the assistant's final reply, plus citations into `message_citations`.
+9. Runs the **MemoryWriter** agent over the exchange to extract durable facts into `conversation_memory`.
+10. If the conversation has no title yet, runs the **TitleAgent**.
 </details>
 
 <details>
 <summary><strong>GET /api/conversations/{conversation_id}/messages</strong> — 200 OK</summary>
 
 Response:
+
 ```json
 [
-  {
-    "id": "uuid",
-    "conversation_id": "uuid",
-    "role": "user",
-    "content": "...",
-    "created_at": "2026-05-05T10:01:00Z"
-  },
-  {
-    "id": "uuid",
-    "conversation_id": "uuid",
-    "role": "assistant",
-    "content": "...",
-    "created_at": "2026-05-05T10:01:05Z"
-  }
+    {
+        "id": "uuid",
+        "conversation_id": "uuid",
+        "role": "user",
+        "content": "...",
+        "created_at": "2026-05-05T10:01:00Z"
+    },
+    {
+        "id": "uuid",
+        "conversation_id": "uuid",
+        "role": "assistant",
+        "content": "...",
+        "created_at": "2026-05-05T10:01:05Z"
+    }
 ]
 ```
+
 </details>
 
 ### Quick `curl` walkthrough
@@ -477,28 +516,33 @@ curl "http://127.0.0.1:8000/api/conversations/$CID/messages" \
 
 All agents are `autogen_agentchat.agents.AssistantAgent` instances backed by the same `OpenAIChatCompletionClient`. They are split into two layers:
 
-### Pre-pipeline agents (cheap, no tools)
+### Pre-pipeline agents
 
-| Agent                  | Job                                                                      |
-| ---------------------- | ------------------------------------------------------------------------ |
-| **GuardrailAgent**     | Replies with exactly `SPORTS` or `NOT_SPORTS`. Filters out off-topic chat |
-| **SportDetectorAgent** | Returns the lowercase sport name, or `general` if it can't decide        |
+| Agent                   | Tools              | Job                                                                                               |
+| ----------------------- | ------------------ | ------------------------------------------------------------------------------------------------- |
+| **GuardrailAgent**      | `search_wikipedia` | Replies with exactly `SPORTS` or `NOT_SPORTS`. Looks up unfamiliar names on Wikipedia when unsure |
+| **SportDetectorAgent**  | none               | Returns the lowercase sport name, or `general` if it can't decide                                 |
+| **TopicExtractorAgent** | none               | Extracts the main sports entity from the message (player, team, tournament) for pre-ingestion     |
 
 ### Pundit team (`SelectorGroupChat`)
 
-| Agent                  | Job                                                                            |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| **StatsPundit**        | Pulls precise statistics, comparisons and records                              |
-| **StorytellerPundit**  | Adds narrative, history, career arcs and historical parallels                  |
-| **DebaterPundit**      | Fact-checks claims and surfaces opposing viewpoints                            |
-| **ModeratorPundit**    | Synthesizes everything into a single opinionated answer; ends with `TERMINATE` |
+| Agent                 | Job                                                                            |
+| --------------------- | ------------------------------------------------------------------------------ |
+| **StatsPundit**       | Pulls precise statistics, comparisons and records                              |
+| **StorytellerPundit** | Adds narrative, history, career arcs and historical parallels                  |
+| **DebaterPundit**     | Fact-checks claims and surfaces opposing viewpoints                            |
+| **PredictorPundit**   | Makes bold, evidence-based predictions about outcomes, careers, and trends     |
+| **TacticsPundit**     | Breaks down tactical formations, game plans, and coaching decisions            |
+| **ModeratorPundit**   | Synthesizes everything into a single opinionated answer; ends with `TERMINATE` |
+
+The team is governed by a **`candidate_func`** that prevents agents from being selected twice and forces `ModeratorPundit` once 3 specialists have spoken. A **`selector_prompt`** further guides the LLM to pick the most relevant unspoken specialist for each turn.
 
 ### Side-effect agents
 
-| Agent             | Job                                                                                |
-| ----------------- | ---------------------------------------------------------------------------------- |
-| **MemoryWriter**  | Reads the user/assistant exchange and writes useful facts into `conversation_memory` |
-| **TitleAgent**    | Generates a ≤6-word title for the conversation if it doesn't have one yet            |
+| Agent            | Job                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| **MemoryWriter** | Reads the user/assistant exchange and writes useful facts into `conversation_memory` |
+| **TitleAgent**   | Generates a ≤6-word title for the conversation if it doesn't have one yet            |
 
 ---
 
@@ -506,17 +550,19 @@ All agents are `autogen_agentchat.agents.AssistantAgent` instances backed by the
 
 All tools are `FunctionTool` wrappers around async Python functions in `app/agents/tools.py`. Each one is a thin wrapper over the RAG / ingestion services.
 
-| Tool                       | Used by              | What it does                                                                       |
-| -------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| `search_stats`             | StatsPundit          | Cosine similarity over `document`, returns top-k snippets + sources                |
-| `compare_players`          | StatsPundit          | Runs `search_stats` for each player and groups results                             |
-| `search_articles`          | StorytellerPundit    | Same vector search, framed for narrative content                                   |
-| `get_historical_parallel`  | StorytellerPundit    | Vector search aimed at finding analogous past events                               |
-| `fact_check`               | DebaterPundit        | Vector search for evidence supporting/contradicting a claim                        |
-| `search_opposing_view`     | DebaterPundit        | Vector search aimed at counter-perspectives                                        |
-| `search_memory`            | All pundits          | Cosine similarity over `conversation_memory` (scoped to this conversation)         |
-| `ingest_and_search`        | All pundits          | Live Wikipedia ingestion → chunk → embed → store, then `search_stats`              |
-| `add_memory`               | MemoryWriter         | Embeds and writes a fact into `conversation_memory`                                |
+| Tool                      | Used by                         | What it does                                                                    |
+| ------------------------- | ------------------------------- | ------------------------------------------------------------------------------- |
+| `search_stats`            | Stats, Predictor, Tactics       | Cosine similarity over `document`, returns top-k snippets + sources             |
+| `compare_players`         | Stats, Predictor, Tactics       | Runs `search_stats` for each player and groups results                          |
+| `search_articles`         | Storyteller, Tactics            | Same vector search, framed for narrative content                                |
+| `get_historical_parallel` | Storyteller, Predictor, Tactics | Vector search aimed at finding analogous past events                            |
+| `fact_check`              | Debater                         | Vector search for evidence supporting/contradicting a claim                     |
+| `search_opposing_view`    | Debater                         | Vector search aimed at counter-perspectives                                     |
+| `search_memory`           | All pundits                     | Cosine similarity over `conversation_memory` (scoped to this conversation)      |
+| `ingest_and_search`       | All pundits                     | Live Wikipedia + (recency-checked) RSS ingestion, then `search_stats`           |
+| `tavily_search` (MCP)     | All pundits                     | Real-time web search fallback when the knowledge base lacks sufficient coverage |
+| `search_wikipedia`        | GuardrailAgent                  | Standalone Wikipedia lookup used purely for sport-topic verification            |
+| `add_memory`              | MemoryWriter                    | Embeds and writes a fact into `conversation_memory`                             |
 
 Whenever a search tool returns a hit, the document's `(id, score)` is recorded in a per-request `cited_documents` list. After the moderator finishes, those citations are persisted into `message_citations`.
 
@@ -525,23 +571,6 @@ Whenever a search tool returns a hit, the document's `(id, score)` is recorded i
 ## 🗺️ Roadmap
 
 The backend is functional end-to-end. Known follow-ups:
-
-### 🐞 Bug — `GuardrailAgent` is too strict
-
-The current `GuardrailAgent` decides `SPORTS` vs `NOT_SPORTS` purely from the LLM's training data, so it rejects prompts about lesser-known or recent athletes (e.g. **Vaibhav Suryavanshi**) on the assumption they're nonsense.
-
-**Plan:** loosen the guardrail's system prompt so that any prompt with a *reasonable chance* of being sports-related passes through. False positives downstream are cheaper than blocking real sports questions.
-
-### 🐞 Bug — Agents skip `ingest_and_search`
-
-The pundit agents default to searching the existing `document` table and stop there, even when the topic is something the knowledge base has never seen (current events, ongoing seasons, recent matches, unknown players/teams).
-
-**Plan:** update the `StatsPundit` / `StorytellerPundit` / `DebaterPundit` system prompts to **explicitly require** calling `ingest_and_search` *first* whenever the question involves:
-- current events or ongoing seasons
-- recent matches or transfers
-- players / teams the agent isn't confident about
-
-…and only then fall back to the cheaper `search_*` tools.
 
 ### ✨ Feature — `GeneralistPundit` agent
 
