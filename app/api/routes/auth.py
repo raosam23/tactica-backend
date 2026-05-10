@@ -4,18 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_session
 from app.models import User
 from app.schemas.auth import (DeleteAccountResponse, LoginRequest,
-                              RegisterRequest, TokenResponse)
+                              RegisterRequest, RegisterResponse, TokenResponse)
 from app.services.authentication_service import (DeleteAccountService,
                                                  LoginService, RegisterService)
 from app.utils.security import get_current_user
 
 router = APIRouter(prefix="/auth")
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest, session: AsyncSession = Depends(get_session)) -> TokenResponse:
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+async def register(request: RegisterRequest, session: AsyncSession = Depends(get_session)) -> RegisterResponse:
     """Endpoint to handle user registration."""
-    token = await RegisterService(session, request.email, request.password, request.name)
-    return TokenResponse(access_token=token, token_type="bearer")
+    return await RegisterService(session, request.email, request.password, request.name)
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 async def login(request: LoginRequest, session: AsyncSession = Depends(get_session)) -> TokenResponse:
