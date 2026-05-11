@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
 
 from app.models.message import Role as RoleType
 

@@ -1,25 +1,33 @@
 import uuid
-from typing import Optional, Tuple, List
-
-from app.schemas.message import CitationResponse
+from typing import List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Document
 from sqlmodel import select
 
 from app.agents.agents import create_pipeline_agents, create_pundit_agents
 from app.agents.group_chat import create_pundit_team
 from app.agents.model_client import create_model_client
 from app.core.config import SPORT_RSS_FEEDS
-from app.models import Conversation
+from app.models import Conversation, Document
 from app.models.message import Role
 from app.models.user import User
+from app.schemas.message import CitationResponse
 from app.services.ingestion_service import (check_if_existing_rss_docs_recent,
                                             run_ingestion)
 from app.services.message_service import (CreateMessageCitationService,
                                           CreateMessageService,
                                           GetMessagesService)
 
+
+def _handle_citation_deduplications(citations: List[CitationResponse]) -> List[CitationResponse]:
+    """Deduplicate citations based on their source, keeping the one with the highest relevance score."""
+    unique_citations = {}
+    for citation in citations:
+        if citation.source not in unique_citations:
+            unique_citations[citation.source] = citation.relevance_score
+        else:
+            unique_citations[citation.source] = max(unique_citations[citation.source], citation.relevance_score)
+    return [CitationResponse(source=source, relevance_score=relevance_score) for source, relevance_score in unique_citations.items()]
 
 async def run_chat_pipeline(
     session: AsyncSession,
@@ -107,10 +115,11 @@ async def run_chat_pipeline(
             if doc_id in documents:
                 citations.append(
                     CitationResponse(
-                        source=documents[doc_id].source,
+                        source=f"{documents[doc_id].metadata_.get('title', 'Unknown Title')} - wikipedia",
                         relevance_score=relevance_score
                     )
                 )
+    citations = _handle_citation_deduplications(citations)
     await pundit_agent["memory_writer_agent"].run(task=conversation_summary,)
 
     result = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
