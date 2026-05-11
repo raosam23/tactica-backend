@@ -1,22 +1,22 @@
 import uuid
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
-    email: str = Field(description="The user's email address")
+    email: EmailStr = Field(description="The user's email address")
     password: str = Field(description="The user's password", min_length=8)
     name: Optional[str] = Field(default=None, description="The user's full name")
 
 class RegisterResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID = Field(description="The unique identifier of the registered user")
-    email: str = Field(description="The email address of the registered user")
+    email: EmailStr = Field(description="The email address of the registered user")
     name: Optional[str] = Field(default=None, description="The full name of the registered user")
 
 class LoginRequest(BaseModel):
-    email: str = Field(description="The user's email address")
+    email: EmailStr = Field(description="The user's email address")
     password: str = Field(description="The user's password")
 
 class TokenResponse(BaseModel):
@@ -25,5 +25,5 @@ class TokenResponse(BaseModel):
 
 class DeleteAccountResponse(BaseModel):
     id: uuid.UUID = Field(description="The unique identifier of the deleted user account")
-    email: str = Field(description="The email address of the deleted user account")
+    email: EmailStr = Field(description="The email address of the deleted user account")
     name: Optional[str] = Field(default=None, description="The full name of the deleted user account")
