@@ -1,7 +1,10 @@
 import uuid
-from typing import Optional
+from typing import Optional, Tuple, List
+
+from app.schemas.message import CitationResponse
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import Document
 from sqlmodel import select
 
 from app.agents.agents import create_pipeline_agents, create_pundit_agents
@@ -24,7 +27,7 @@ async def run_chat_pipeline(
     user_message: str,
     user: User,
     sport: Optional[str] = None
-) -> str:
+) -> Tuple[str, List[CitationResponse]]:
     model_client = create_model_client()
 
     # Create pipeline agents that does not need sport
@@ -34,7 +37,7 @@ async def run_chat_pipeline(
     guardrail_response = guardrail_result.messages[-1].content.strip().upper()
 
     if "NOT_SPORTS" in guardrail_response:
-        return "I'm only here to talk about sports! Please ask me a sports-related question or make a sports-related statement."
+        return "I'm only here to talk about sports! Please ask me a sports-related question or make a sports-related statement.", []
     
     if sport is None:
         sport_result = await pipeline_agents["sport_detector_agent"].run(task=user_message)
@@ -94,9 +97,20 @@ async def run_chat_pipeline(
 
     # Create assistant message in database
     message = await CreateMessageService(session, conversation_id, Role.ASSISTANT, final_response)
+    citations = []
     if cited_documents:
         await CreateMessageCitationService(session, message.id, cited_documents)
-
+        doc_ids = [doc_id for doc_id, _ in cited_documents]
+        docs_result = await session.execute(select(Document).where(Document.id.in_(doc_ids)))
+        documents = {doc.id: doc for doc in docs_result.scalars().all()}
+        for doc_id, relevance_score in cited_documents:
+            if doc_id in documents:
+                citations.append(
+                    CitationResponse(
+                        source=documents[doc_id].source,
+                        relevance_score=relevance_score
+                    )
+                )
     await pundit_agent["memory_writer_agent"].run(task=conversation_summary,)
 
     result = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
@@ -110,6 +124,4 @@ async def run_chat_pipeline(
         conversation.title = generated_title
         session.add(conversation)
         await session.commit()
-
-
-    return final_response
+    return (final_response, citations)

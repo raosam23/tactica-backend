@@ -22,6 +22,11 @@ async def login(request: LoginRequest, session: AsyncSession = Depends(get_sessi
     token = await LoginService(session, request.email, request.password)
     return TokenResponse(access_token=token, token_type="bearer")
 
+@router.get("/me", response_model=RegisterResponse, status_code=status.HTTP_200_OK)
+async def get_current_user_info(current_user: User = Depends(get_current_user)) -> RegisterResponse:
+    """Endpoint to retrieve current user's information."""
+    return RegisterResponse.model_validate(current_user)
+
 @router.delete("/me", response_model=DeleteAccountResponse, status_code=status.HTTP_200_OK)
 async def delete_account(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> DeleteAccountResponse:
     """Endpoint to handle account deletion."""

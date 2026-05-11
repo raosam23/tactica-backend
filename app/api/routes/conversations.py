@@ -42,5 +42,5 @@ async def delete_conversation(conversation_id: uuid.UUID, user: User = Depends(g
 async def chat(conversation_id: uuid.UUID, request: ChatRequest, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> ChatResponse:
     """Endpoint to send a message to the sports pundit chatbot and get a response."""
     await GetConversationService(session, user, conversation_id)
-    response = await run_chat_pipeline(session, conversation_id, request.message, user)
-    return ChatResponse(message=response)
+    response, citations = await run_chat_pipeline(session, conversation_id, request.message, user)
+    return ChatResponse(message=response, citations=citations)

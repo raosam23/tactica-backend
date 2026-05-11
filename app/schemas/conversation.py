@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+from app.schemas.message import CitationResponse
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,3 +22,4 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str = Field(description="The sports pundit chatbot's response to the user's message")
+    citations: List[CitationResponse] = Field(default_factory=list, description="A list of citations for the chatbot's response")
