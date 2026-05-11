@@ -330,8 +330,9 @@ Authorization: Bearer <jwt>
 | Method | Path                                            | Auth | Purpose                                   |
 | :----: | ----------------------------------------------- | :--: | ----------------------------------------- |
 |  GET   | `/health`                                       |  ❌  | Liveness probe                            |
-|  POST  | `/api/auth/register`                            |  ❌  | Create user, return JWT                   |
+|  POST  | `/api/auth/register`                            |  ❌  | Create user, return user object           |
 |  POST  | `/api/auth/login`                               |  ❌  | Verify credentials, return JWT            |
+|  GET   | `/api/auth/me`                                  |  ✅  | Get current user's profile                |
 | DELETE | `/api/auth/me`                                  |  ✅  | Delete the current user's account         |
 |  POST  | `/api/conversations/`                           |  ✅  | Create a new conversation                 |
 |  GET   | `/api/conversations/`                           |  ✅  | List the current user's conversations     |
@@ -346,13 +347,16 @@ Authorization: Bearer <jwt>
 Request:
 
 ```json
-{ "email": "user@example.com", "password": "strong-password", "name": "Samarth" }
+{ "email": "user@example.com", "password": "strongpass", "name": "Samarth" }
 ```
+
+- `email` must be a valid email address (validated via `EmailStr`)
+- `password` must be at least 8 characters
 
 Response:
 
 ```json
-{ "access_token": "<jwt>", "token_type": "bearer" }
+{ "id": "uuid", "email": "user@example.com", "name": "Samarth" }
 ```
 
 </details>
@@ -441,8 +445,16 @@ Request:
 Response:
 
 ```json
-{ "message": "<final pundit answer>" }
+{
+    "message": "<final pundit answer>",
+    "citations": [
+        { "source": "2024 Indian Premier League - wikipedia", "relevance_score": 0.48 },
+        { "source": "www.espn.com - SOCCER", "relevance_score": 0.59 }
+    ]
+}
 ```
+
+Citations are deduplicated by source — only the highest relevance score is kept per unique source.
 
 What this endpoint actually does:
 
@@ -487,25 +499,30 @@ Response:
 ### Quick `curl` walkthrough
 
 ```bash
-# 1. Register and capture the token
-TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/auth/register \
+# 1. Register
+curl -s -X POST http://127.0.0.1:8000/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"u@x.com","password":"hunter22","name":"Samarth"}' \
+  -d '{"email":"u@x.com","password":"hunter22","name":"Michael Scott"}'
+
+# 2. Login and capture the token
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"u@x.com","password":"hunter22"}' \
   | jq -r '.access_token')
 
-# 2. Create a conversation
+# 3. Create a conversation
 CID=$(curl -s -X POST http://127.0.0.1:8000/api/conversations/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}' | jq -r '.id')
 
-# 3. Talk to the pundit
+# 4. Talk to the pundit
 curl -X POST "http://127.0.0.1:8000/api/conversations/$CID/chat" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Who had the greater peak — Messi or Maradona?"}'
 
-# 4. Read the thread
+# 5. Read the thread
 curl "http://127.0.0.1:8000/api/conversations/$CID/messages" \
   -H "Authorization: Bearer $TOKEN"
 ```
@@ -572,15 +589,6 @@ Whenever a search tool returns a hit, the document's `(id, score)` is recorded i
 
 The backend is functional end-to-end. Known follow-ups:
 
-### ✨ Feature — `GeneralistPundit` agent
-
-Not every sports question needs stats, narrative, or debate. Casual prompts ("who's playing tonight?", "what's offside?") currently get force-routed through the full retrieval-heavy pipeline.
-
-**Plan:** add a `GeneralistPundit` to the `SelectorGroupChat` participants list. It carries **no tools** and answers from its own LLM knowledge. The `SelectorGroupChat`'s selector should route to it when the question doesn't strictly require Stats / Storyteller / Debater work, leaving the heavy specialists for questions that actually warrant them.
-
-### Other follow-ups
-
-- **Return citations in the chat response.** They are already persisted in `message_citations` — the API just doesn't surface them yet.
 - **Frontend.** Build the Next.js client.
 - **Richer ingestion.** More sources beyond Wikipedia + RSS; an internal admin endpoint to trigger ingestion explicitly.
 - **Observability.** Per-turn traces for retrieval quality, tool calls, and agent decisions.
