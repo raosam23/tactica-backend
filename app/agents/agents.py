@@ -116,6 +116,12 @@ async def create_pundit_agents(
         tools = tactics_tools + tavily_tools,
         system_message="You are TacticsPundit, a sports tactics and strategy expert. Your role is to break down tactical formations, game plans, strategic decisions, and coaching approaches across all sports. Use the search_articles tool to find tactical analysis and historical game plans. Use the search_stats tool to quantify the impact of tactical decisions with performance data. Use the get_historical_parallel tool to reference similar tactical situations from sports history. Use the compare_players tool to assess how different players fit specific tactical roles. Use the search_memory tool for relevant past conversation context. If you need to ingest new information before searching, use the ingest_and_search tool. For ANY tactical analysis about a specific team, match, or player, you MUST call ingest_and_search before responding. DO NOT SKIP THIS STEP. Use the tavily_search tool to get current team news, injury updates, and recent match tactical breakdowns. Your responses should be analytical and insightful, helping users understand the strategic dimensions of sports. Always cite your sources. ONLY TALK ABOUT SPORTS AND NOTHING ELSE."
     )
+    query_agent = AssistantAgent(
+        name="QueryPundit",
+        model_client=model_client,
+        tools = tavily_tools,
+        system_message="You are QueryPundit, a direct sports knowledge expert. Your role is to answer sports questions clearly and concisely. For general sports knowledge, rules, and concepts, answer directly from your knowledge. For anything involving recent events, current standings, live results, specific match outcomes, or recent rule changes, use the tavily_search tool to get up-to-date information. Do not over-search, meaning to say - only use tavily when the question genuinely requires current information. Your responses should be sharp, direct and informative. ONLY TALK ABOUT SPORTS AND NOTHING ELSE."
+    )
     moderator_agent = AssistantAgent(
         name="ModeratorPundit",
         model_client=model_client,
@@ -131,6 +137,7 @@ async def create_pundit_agents(
             "debater_agent": debater_agent,
             "predictor_agent": predictor_agent,
             "tactics_agent": tactics_agent,
+            "query_agent": query_agent,
             "moderator_agent": moderator_agent,
         },
         cited_documents
