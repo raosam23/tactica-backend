@@ -151,3 +151,16 @@ Optional (with defaults): `OPENAI_MODEL` (gpt-4o-mini), `EMBEDDING_MODEL` (text-
 - DB column name collisions with reserved names use a trailing underscore on the attribute (e.g., `metadata_` maps to the `metadata` column).
 - The `cited_documents` list in `make_tools` is a mutable list captured by closure — all RAG tool calls append `(doc_id, score)` to it for later citation tracking.
 - Alembic imports all models explicitly in `alembic/env.py` to ensure autogenerate detects schema changes.
+
+# Commit message format
+
+```
+bug/feat/chore/docs: brief one line summary of the changes
+- point by point list of changes
+- you can add more points
+- if you feel like the commit message can be better, suggest a better one
+```
+
+
+## Additional rules
+- Do not change existing commite messages, I will handle the git commit process, you just have to suggest me the commit message if I ask for it. DO NOT ADD OR COMMIT OR PUSH CODE YOURSELF.
