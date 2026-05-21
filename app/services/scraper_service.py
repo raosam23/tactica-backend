@@ -37,7 +37,9 @@ async def scrape_wikipedia_articles(
         data = response.json()
 
     results = []
-    for page in data["query"]["pages"].values():
+    query = data.get("query", {})
+    pages = query.get("pages", {})
+    for page in pages.values():
         content = page.get("extract", "")
         if not content:
             continue
