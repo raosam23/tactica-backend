@@ -115,7 +115,7 @@ async def run_chat_pipeline(
             if doc_id in documents:
                 citations.append(
                     CitationResponse(
-                        source=f"{documents[doc_id].metadata_.get('title', 'Unknown Title')} - wikipedia",
+                        source=f"{documents[doc_id].metadata_.get('title', 'Unknown Title')} - {documents[doc_id].source}",
                         relevance_score=relevance_score
                     )
                 )
