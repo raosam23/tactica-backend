@@ -2,13 +2,14 @@ import uuid
 from typing import List
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.pipeline import run_chat_pipeline
 from app.db.database import get_session
 from app.models.user import User
-from app.schemas.conversation import (ChatRequest, ChatResponse,
-                                      ConversationCreate, ConversationResponse)
+from app.schemas.conversation import (ChatRequest, ConversationCreate,
+                                      ConversationResponse)
 from app.services.conversation_service import (CreateConversationService,
                                                DeleteConversationService,
                                                GetConversationService,
@@ -38,9 +39,11 @@ async def delete_conversation(conversation_id: uuid.UUID, user: User = Depends(g
     conversation = await GetConversationService(session, user, conversation_id)
     return await DeleteConversationService(session, conversation)
 
-@router.post("/{conversation_id}/chat", response_model=ChatResponse, status_code=status.HTTP_200_OK)
-async def chat(conversation_id: uuid.UUID, request: ChatRequest, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> ChatResponse:
-    """Endpoint to send a message to the sports pundit chatbot and get a response."""
+@router.post("/{conversation_id}/chat")
+async def chat(conversation_id: uuid.UUID, request: ChatRequest, user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)) -> StreamingResponse:
+    """Endpoint to send a message to the sports pundit chatbot and get a streaming response."""
     await GetConversationService(session, user, conversation_id)
-    response, citations = await run_chat_pipeline(session, conversation_id, request.message, user)
-    return ChatResponse(message=response, citations=citations)
+    return StreamingResponse(
+        run_chat_pipeline(session, conversation_id, request.message, user),
+        media_type="text/event-stream"
+    )

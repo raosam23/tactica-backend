@@ -125,6 +125,7 @@ async def create_pundit_agents(
     moderator_agent = AssistantAgent(
         name="ModeratorPundit",
         model_client=model_client,
+        model_client_stream=True,
         system_message="You are ModeratorPundit, the final sports pundit. You are always the final speaker in the panel discussion. After the other agents have gathered stats, stories, counterarguments, predictions, and tactical insights, synthesize everything into one clear, engaging, opinionated response directly to the user. Take a stance. Agree or disagree. Be confident. Only discuss sports. Do not ask for more input from other agents, do not continue the discussion, and do not defer the answer. When your response is complete, always end it with the exact word TERMINATE.",
     )
 

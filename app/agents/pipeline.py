@@ -1,5 +1,6 @@
 import uuid
-from typing import List, Optional, Tuple
+from typing import List, Optional, AsyncGenerator
+import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -17,6 +18,8 @@ from app.services.ingestion_service import (check_if_existing_rss_docs_recent,
 from app.services.message_service import (CreateMessageCitationService,
                                           CreateMessageService,
                                           GetMessagesService)
+from autogen_agentchat.messages import ModelClientStreamingChunkEvent
+from autogen_agentchat.base import TaskResult
 
 
 def _handle_citation_deduplications(citations: List[CitationResponse]) -> List[CitationResponse]:
@@ -35,7 +38,7 @@ async def run_chat_pipeline(
     user_message: str,
     user: User,
     sport: Optional[str] = None
-) -> Tuple[str, List[CitationResponse]]:
+) -> AsyncGenerator[str, None]:
     model_client = create_model_client()
 
     # Create pipeline agents that does not need sport
@@ -45,7 +48,11 @@ async def run_chat_pipeline(
     guardrail_response = guardrail_result.messages[-1].content.strip().upper()
 
     if "NOT_SPORTS" in guardrail_response:
-        return "I'm only here to talk about sports! Please ask me a sports-related question or make a sports-related statement.", []
+        message = "I'm only here to talk about sports! Please ask me a sports-related question or make a sports-related statement."
+        for word in message.split():
+            yield f"data: {json.dumps({'type': 'token', 'content': word + ' '})}\n\n"
+        yield f"data: {json.dumps({'type': 'citations', 'citations': []})}\n\n"
+        return
     
     if sport is None:
         sport_result = await pipeline_agents["sport_detector_agent"].run(task=user_message)
@@ -90,47 +97,48 @@ async def run_chat_pipeline(
         sport=detected_sport,
     )
 
-    result = await team.run(task=task)
-
     final_response = ""
-    for message in reversed(result.messages):
-        if hasattr(message, "source") and message.source == "ModeratorPundit":
-            final_response = message.content.replace("TERMINATE", "").strip()
-            break
-    
-    conversation_summary = f"User: {user_message}\n\nAssistant: {final_response}"
+    async for event in team.run_stream(task=task):
+        if isinstance(event, ModelClientStreamingChunkEvent) and (event.source == "ModeratorPundit"):
+            final_response += event.content
+            if "TERMINATE" not in event.content:
+                yield f"data: {json.dumps({'type': 'token', 'content': event.content})}\n\n"
+        elif isinstance(event, TaskResult):
+            final_response = final_response.replace("TERMINATE", "").strip()
+            if not final_response:
+                final_response = "Sorry, I wasn't able to generate a response. Please try again."
+                for word in final_response.split():
+                    yield f"data: {json.dumps({'type': 'token', 'content': word + ' '})}\n\n"
+            conversation_summary = f"User: {user_message}\n\nAssistant: {final_response}"
 
-    if not final_response:
-        final_response = "Sorry, I wasn't able to generate a response. Please try again."
+            # Create assistant message in database
+            message = await CreateMessageService(session, conversation_id, Role.ASSISTANT, final_response)
+            citations = []
+            if cited_documents:
+                await CreateMessageCitationService(session, message.id, cited_documents)
+                doc_ids = [doc_id for doc_id, _ in cited_documents]
+                docs_result = await session.execute(select(Document).where(Document.id.in_(doc_ids)))
+                documents = {doc.id: doc for doc in docs_result.scalars().all()}
+                for doc_id, relevance_score in cited_documents:
+                    if doc_id in documents:
+                        citations.append(
+                            CitationResponse(
+                                source=f"{documents[doc_id].metadata_.get('title', 'Unknown Title')} - {documents[doc_id].source}",
+                                relevance_score=relevance_score
+                            )
+                        )
+            citations = _handle_citation_deduplications(citations)
+            await pundit_agent["memory_writer_agent"].run(task=conversation_summary,)
 
-    # Create assistant message in database
-    message = await CreateMessageService(session, conversation_id, Role.ASSISTANT, final_response)
-    citations = []
-    if cited_documents:
-        await CreateMessageCitationService(session, message.id, cited_documents)
-        doc_ids = [doc_id for doc_id, _ in cited_documents]
-        docs_result = await session.execute(select(Document).where(Document.id.in_(doc_ids)))
-        documents = {doc.id: doc for doc in docs_result.scalars().all()}
-        for doc_id, relevance_score in cited_documents:
-            if doc_id in documents:
-                citations.append(
-                    CitationResponse(
-                        source=f"{documents[doc_id].metadata_.get('title', 'Unknown Title')} - {documents[doc_id].source}",
-                        relevance_score=relevance_score
-                    )
+            result = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+            conversation = result.scalar_one_or_none()
+            if conversation and not conversation.title:
+                title_result = await pundit_agent["title_agent"].run(
+                    task=f"User: {user_message}\n\nAssistant: {final_response}\n\nGenerate a short, catchy title that captures the main topic of this conversation. Maximum 6 words. No punctuation,",
                 )
-    citations = _handle_citation_deduplications(citations)
-    await pundit_agent["memory_writer_agent"].run(task=conversation_summary,)
 
-    result = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
-    conversation = result.scalar_one_or_none()
-    if conversation and not conversation.title:
-        title_result = await pundit_agent["title_agent"].run(
-            task=f"User: {user_message}\n\nAssistant: {final_response}\n\nGenerate a short, catchy title that captures the main topic of this conversation. Maximum 6 words. No punctuation,",
-        )
-
-        generated_title = title_result.messages[-1].content.strip()
-        conversation.title = generated_title
-        session.add(conversation)
-        await session.commit()
-    return (final_response, citations)
+                generated_title = title_result.messages[-1].content.strip()
+                conversation.title = generated_title
+                session.add(conversation)
+                await session.commit()
+            yield f"data: {json.dumps({'type': 'citations', 'citations': [c.model_dump() for c in citations]})}\n\n"
