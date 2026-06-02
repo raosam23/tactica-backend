@@ -17,7 +17,6 @@ async def GetMessagesService(session: AsyncSession, user: User, conversation_id:
     conversation = await GetConversationService(session, user, conversation_id)
     result = await session.execute(select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at.asc()))
     messages = result.scalars().all()
-    # return [MessageResponse.model_validate(message) for message in messages]
     message_response = []
     for message in messages:
         citation_result = await session.execute(select(MessageCitation).where(MessageCitation.message_id == message.id))
@@ -28,14 +27,21 @@ async def GetMessagesService(session: AsyncSession, user: User, conversation_id:
             doc_ids = [citation.document_id for citation in message_citations]
             docs_result = await session.execute(select(Document).where(Document.id.in_(doc_ids)))
             documents = {doc.id: doc for doc in docs_result.scalars().all()}
+            unique_citations: dict[str, float | None] = {}
             for citation in message_citations:
                 if citation.document_id in documents:
-                    citations.append(
-                        CitationResponse(
-                            source=f"{documents[citation.document_id].metadata_.get('title', 'Unknown Title')} - {documents[citation.document_id].source}",
-                            relevance_score=citation.relevance_score
-                        )
+                    source = f"{documents[citation.document_id].metadata_.get('title', 'Unknown Title')} - {documents[citation.document_id].source}"
+                    if source not in unique_citations:
+                        unique_citations[source] = citation.relevance_score
+                    else:
+                        unique_citations[source] = max(unique_citations[source], citation.relevance_score)
+            for source, score in unique_citations.items():
+                citations.append(
+                    CitationResponse(
+                        source=source,
+                        relevance_score=score
                     )
+                )
         message_response.append(MessageResponse(
             id=message.id,
             conversation_id=message.conversation_id,
