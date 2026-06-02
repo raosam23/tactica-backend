@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏟️ Tactica
+# Tactica — Backend
 
 ### A sports-only AI pundit, powered by RAG and a multi-agent debate pipeline
 
@@ -11,134 +11,112 @@
   <img alt="pgvector"  src="https://img.shields.io/badge/pgvector-VECTOR(1536)-6E40C9?style=flat-square" />
   <img alt="OpenAI"    src="https://img.shields.io/badge/OpenAI-gpt--4o--mini-111111?style=flat-square&logo=openai&logoColor=white" />
   <img alt="AutoGen"   src="https://img.shields.io/badge/AutoGen-AgentChat-FF6B35?style=flat-square" />
-  <img alt="Status"    src="https://img.shields.io/badge/status-backend--complete-success?style=flat-square" />
+  <img alt="Status"    src="https://img.shields.io/badge/status-complete-success?style=flat-square" />
 </p>
 
-<sub>Backend repository · Frontend not yet started</sub>
+<sub>Backend repository · <a href="https://github.com/raosam23/tactica-frontend">Frontend repository →</a></sub>
 
 </div>
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
-- [What is Tactica?](#-what-is-tactica)
-- [How it works](#-how-it-works)
-- [Architecture at a glance](#-architecture-at-a-glance)
-- [Tech stack](#-tech-stack)
-- [Project layout](#-project-layout)
-- [Database schema](#-database-schema)
-- [Getting started](#-getting-started)
-- [Environment variables](#-environment-variables)
-- [API reference](#-api-reference)
-- [Agent pipeline](#-agent-pipeline)
-- [Agent tools](#-agent-tools)
-- [Roadmap](#-roadmap)
+- [What is Tactica?](#what-is-tactica)
+- [How it works](#how-it-works)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Project layout](#project-layout)
+- [Database schema](#database-schema)
+- [Getting started](#getting-started)
+- [Environment variables](#environment-variables)
+- [API reference](#api-reference)
+- [Agent pipeline](#agent-pipeline)
+- [Agent tools](#agent-tools)
+- [Roadmap](#roadmap)
 
 ---
 
-## 🧠 What is Tactica?
+## What is Tactica?
 
-Tactica is the **backend** of a 1-on-1 sports chatbot. A logged-in user opens a conversation and talks to an AI **pundit** that can take a stance, debate, share stats and tell stories — but **only about sports**.
+Tactica is the **backend** of a 1-on-1 sports chatbot. A logged-in user opens a conversation and talks to an AI **pundit** that can take a stance, debate, share stats and tell stories — but **only about sports**. The final answer is **streamed back token by token** over Server-Sent Events.
 
 What makes it different from a plain LLM chat:
 
 - **Retrieval-augmented.** Answers are grounded in real documents stored as embeddings in PostgreSQL via `pgvector`.
 - **Live ingestion.** Before the pundit team runs, the pipeline pre-ingests the user's topic from **Wikipedia + sport-specific RSS feeds** so the knowledge base is always populated with fresh evidence. Agents can also pull more on demand mid-conversation, with a 60-minute RSS recency check to avoid redundant scraping.
 - **Real-time web fallback.** When the knowledge base still lacks coverage, pundits can call **Tavily** (via MCP) for live web search.
-- **Multi-agent debate.** Behind a single "pundit" persona, **five specialist AutoGen agents** (Stats, Storyteller, Debater, Predictor, Tactics) collaborate before a Moderator synthesizes one polished answer. A `candidate_func` enforces turn-taking so each specialist speaks at most once.
+- **Multi-agent debate.** Behind a single "pundit" persona, **specialist AutoGen agents** (Stats, Storyteller, Debater, Predictor, Tactics, Query) collaborate before a Moderator synthesizes one polished answer. A `candidate_func` enforces turn-taking so each specialist speaks at most once.
+- **Token streaming.** The Moderator's synthesis is streamed token by token to the client via SSE, with citations sent as a final event.
 - **Conversation-scoped memory.** A separate `conversation_memory` vector table remembers facts, opinions and conclusions per chat thread.
 - **Sports-only.** A guardrail agent rejects non-sports prompts before any heavy work is done — and can verify uncertain names against Wikipedia before deciding.
 
-> ⚠️ **Frontend status:** This repo is backend-only. A Next.js frontend is planned but not yet started.
+> The frontend is built and available at [tactica-frontend](https://github.com/raosam23/tactica-frontend).
 
 ---
 
-## 🔁 How it works
+## How it works
 
-When a user sends a message to `POST /api/conversations/{id}/chat`, this is what happens behind the scenes:
+When a user sends a message to `POST /api/conversations/{id}/chat`, this is the flow:
 
-```
-                ┌──────────────────────────┐
-   user msg →   │  GuardrailAgent          │  → "NOT_SPORTS" → polite refusal
-                │  (Wikipedia tool)        │
-                └────────────┬─────────────┘
-                             ▼ "SPORTS"
-                ┌──────────────────────────┐
-                │  SportDetectorAgent      │  → e.g. "football", "tennis", "general"
-                └────────────┬─────────────┘
-                             ▼
-            persist user msg, load last 10 messages as context
-                             ▼
-                ┌──────────────────────────┐
-                │  TopicExtractorAgent     │  → main entity (e.g. "Lionel Messi")
-                └────────────┬─────────────┘
-                             ▼
-       Pre-ingestion: Wikipedia + sport-specific RSS feeds
-       (RSS skipped if a non-Wikipedia doc was ingested in the last 60 min)
-                             ▼
-   ┌─────────────────────────────────────────────────────────┐
-   │              SelectorGroupChat (AutoGen)                │
-   │                                                         │
-   │   Stats   Storyteller   Debater   Predictor   Tactics   │
-   │      \         \           |          /          /      │
-   │       └────────►  ModeratorPundit  ◄───────────┘      |
-   │                    (says TERMINATE)                     │
-   │                                                         │
-   │   candidate_func: each specialist speaks at most once,  │
-   │   Moderator forced after 3 specialists have contributed │
-   └─────────────────────────────┬───────────────────────────┘
-                                 ▼
-              persist assistant msg + citations
-                                 ▼
-              MemoryWriter → conversation_memory
-                                 ▼
-              TitleAgent (only on first turn)
-                                 ▼
-                       return final answer
+```mermaid
+flowchart TD
+    A([User message]) --> B{GuardrailAgent<br/>Wikipedia tool}
+    B -->|NOT_SPORTS| R([Polite refusal])
+    B -->|SPORTS| C[SportDetectorAgent<br/>football / tennis / general]
+    C --> D[Persist user message<br/>load last 10 as context]
+    D --> E[TopicExtractorAgent<br/>main entity e.g. Lionel Messi]
+    E --> F[Pre-ingestion<br/>Wikipedia + sport RSS feeds<br/>RSS skipped if ingested in last 60 min]
+    F --> G
+
+    subgraph G [SelectorGroupChat - AutoGen]
+        direction TB
+        S1[Stats] --- S2[Storyteller] --- S3[Debater]
+        S3 --- S4[Predictor] --- S5[Tactics] --- S6[Query]
+        S6 --> M[ModeratorPundit<br/>synthesizes, ends with TERMINATE]
+    end
+
+    G --> H[Stream tokens over SSE]
+    H --> I[Persist assistant message + citations]
+    I --> J[MemoryWriter to conversation_memory]
+    J --> K[TitleAgent on first turn only]
+    K --> Z([Citations event ends stream])
 ```
 
-**Termination:** the team stops when `ModeratorPundit` ends its message with `TERMINATE`, or after 15 messages as a safety cap.
+**Turn-taking:** a `candidate_func` ensures each specialist speaks at most once and forces `ModeratorPundit` once enough specialists have contributed.
+
+**Termination:** the team stops when `ModeratorPundit` ends its message with `TERMINATE`, or after a message cap as a safety net.
 
 ---
 
-## 🏗️ Architecture at a glance
+## Architecture
 
-```
-        ┌────────────────────────┐
-client->│   FastAPI (Uvicorn)    │
-        └──────────┬─────────────┘
-                   │
-        ┌──────────┴─────────────┐
-        │   /api/auth            │  JWT register / login / delete-me
-        │   /api/conversations   │  CRUD + /chat (the pipeline)
-        │   /api/conversations/  │  /messages list
-        │      {id}/messages     │
-        └──────────┬─────────────┘
-                   │
-        ┌──────────┴─────────────┐
-        │  Services layer        │  auth · conversation · message · rag · ingestion
-        └──────────┬─────────────┘
-                   │
-        ┌──────────┴─────────────┐
-        │  Agents layer          │  pipeline · agents · tools · group_chat
-        └──────────┬─────────────┘
-                   │
-   ┌───────────────┴───────────────┐
-   │   PostgreSQL + pgvector       │   user, conversation, message,
-   │   (NeonDB compatible)         │   message_citations, document,
-   │                               │   conversation_memory
-   └───────────────────────────────┘
+```mermaid
+flowchart TD
+    Client([Client]) --> API[FastAPI - Uvicorn]
+
+    subgraph Routes
+        Auth["/api/auth — JWT register / login / me"]
+        Conv["/api/conversations — CRUD + /chat - SSE"]
+        Msg["/api/conversations/:id/messages"]
+    end
+
+    API --> Routes
+    Routes --> Services[Services layer<br/>auth · conversation · message · rag · ingestion]
+    Services --> Agents[Agents layer<br/>pipeline · agents · tools · group_chat]
+    Agents --> DB[(PostgreSQL + pgvector<br/>user · conversation · message<br/>message_citations · document · conversation_memory)]
+    Services --> DB
 ```
 
 ---
 
-## 🧰 Tech stack
+## Tech stack
 
 | Layer                 | Choice                                       |
 | --------------------- | -------------------------------------------- |
 | Language              | Python 3.12+                                 |
 | API framework         | FastAPI (async)                              |
+| Streaming             | Server-Sent Events via `StreamingResponse`   |
 | Server                | Uvicorn                                      |
 | ORM / models          | SQLModel + SQLAlchemy async                  |
 | DB                    | PostgreSQL (Neon-compatible, SSL required)   |
@@ -154,22 +132,22 @@ client->│   FastAPI (Uvicorn)    │
 
 ---
 
-## 📁 Project layout
+## Project layout
 
 ```
 backend/
 ├── app/
 │   ├── main.py                     # FastAPI app + CORS + /health
-│   ├── core/config.py              # Pydantic settings (.env loader)
-│   ├── db/database.py              # async engine + session factory
-│   │
+│   ├── core/
+│   │   └── config.py               # Pydantic settings (.env loader)
+│   ├── db/
+│   │   └── database.py             # async engine + session factory
 │   ├── api/
-│   │   ├── router.py               # mounts /api with auth, conversations, messages
+│   │   ├── router.py               # mounts /api
 │   │   └── routes/
 │   │       ├── auth.py             # /api/auth/{register,login,me}
-│   │       ├── conversations.py    # /api/conversations + /chat
+│   │       ├── conversations.py    # /api/conversations + /chat (SSE)
 │   │       └── messages.py         # /api/conversations/{id}/messages
-│   │
 │   ├── models/                     # SQLModel tables
 │   │   ├── user.py
 │   │   ├── conversation.py
@@ -177,32 +155,28 @@ backend/
 │   │   ├── message_citation.py
 │   │   ├── document.py
 │   │   └── conversation_memory.py
-│   │
 │   ├── schemas/                    # Pydantic request/response DTOs
 │   │   ├── auth.py
 │   │   ├── conversation.py
 │   │   └── message.py
-│   │
 │   ├── services/                   # business logic
 │   │   ├── authentication_service.py
 │   │   ├── conversation_service.py
 │   │   ├── message_service.py
 │   │   ├── rag_service.py          # pgvector cosine search + memory writes
-│   │   ├── ingestion_service.py    # scrape → chunk → embed → store
+│   │   ├── ingestion_service.py    # scrape -> chunk -> embed -> store
 │   │   ├── scraper_service.py      # Wikipedia + RSS
 │   │   ├── chunker_service.py      # character chunking with overlap
 │   │   └── embedding_service.py    # OpenAI embedding calls
-│   │
 │   ├── agents/                     # AutoGen layer
 │   │   ├── model_client.py         # OpenAIChatCompletionClient factory
-│   │   ├── agents.py               # all AssistantAgent definitions + prompts
+│   │   ├── agents.py               # AssistantAgent definitions + prompts
 │   │   ├── tools.py                # FunctionTool implementations (RAG-backed)
 │   │   ├── group_chat.py           # SelectorGroupChat for the pundit team
 │   │   └── pipeline.py             # the orchestrator called by /chat
-│   │
-│   └── utils/security.py           # JWT, bcrypt, get_current_user dependency
-│
-├── alembic/                        # migration env + 4 revisions
+│   └── utils/
+│       └── security.py             # JWT, bcrypt, get_current_user dependency
+├── alembic/                        # migration env + revisions
 ├── alembic.ini
 ├── pyproject.toml                  # deps managed by uv
 └── uv.lock
@@ -210,7 +184,7 @@ backend/
 
 ---
 
-## 🗄️ Database schema
+## Database schema
 
 Six tables, all migrated via Alembic:
 
@@ -227,28 +201,35 @@ Foreign keys use `ON DELETE CASCADE`, so deleting a conversation cleans up its m
 
 ---
 
-## 🚀 Getting started
+## Getting started
+
+> Tactica needs **both** repositories. This is the backend — the frontend lives at [tactica-frontend](https://github.com/raosam23/tactica-frontend) and expects this server running on `http://localhost:8000`.
 
 ### 1. Prerequisites
 
 - Python **3.12+**
 - [`uv`](https://docs.astral.sh/uv/) — `pipx install uv` or follow the official installer
 - A PostgreSQL database with the `vector` extension available (Neon works out of the box; the connection requires SSL)
-- An OpenAI API key
+- An OpenAI API key and a Tavily API key
 
-### 2. Install
+### 2. Clone the repository
 
 ```bash
-git clone <this-repo>
-cd backend
+git clone https://github.com/raosam23/tactica-backend
+cd tactica-backend
+```
+
+### 3. Install dependencies
+
+```bash
 uv sync
 ```
 
-### 3. Configure
+### 4. Configure environment
 
-Create a `.env` in the `backend/` directory — see [Environment variables](#-environment-variables) below.
+Create a `.env` in the project root — see [Environment variables](#environment-variables).
 
-### 4. Run migrations
+### 5. Run migrations
 
 ```bash
 uv run alembic upgrade head
@@ -256,7 +237,7 @@ uv run alembic upgrade head
 
 This creates all six tables and enables the `pgvector` extension.
 
-### 5. Start the server
+### 6. Start the server
 
 ```bash
 uv run uvicorn app.main:app --reload
@@ -270,26 +251,26 @@ uv run uvicorn app.main:app --reload
 
 ---
 
-## ⚙️ Environment variables
+## Environment variables
 
 Loaded from `.env` via `pydantic-settings`.
 
 | Variable                      | Required | Default                                              | Notes                                     |
 | ----------------------------- | :------: | ---------------------------------------------------- | ----------------------------------------- |
-| `APP_NAME`                    |          | `Tactica`                                            |                                           |
-| `APP_ENV`                     |          | `development`                                        |                                           |
-| `DEBUG`                       |          | `True`                                               | Enables SQLAlchemy `echo`                 |
-| `DATABASE_URL`                |    ✅    | —                                                    | Must be `postgresql+asyncpg://...`        |
-| `SECRET_KEY`                  |    ✅    | —                                                    | JWT signing secret                        |
-| `ALGORITHM`                   |          | `HS256`                                              |                                           |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` |          | `30`                                                 |                                           |
-| `SALT_ROUNDS`                 |          | `12`                                                 | bcrypt cost                               |
-| `OPENAI_API_KEY`              |    ✅    | —                                                    |                                           |
-| `OPENAI_MODEL`                |          | `gpt-4o-mini`                                        | Used by every agent                       |
-| `EMBEDDING_MODEL`             |          | `text-embedding-3-small`                             |                                           |
-| `VECTOR_DIMENSION`            |          | `1536`                                               | Must match the embedding model            |
-| `TAVILY_API_KEY`              |    ✅    | —                                                    | Used by pundits via the Tavily MCP server |
-| `ALLOWED_ORIGINS`             |          | `["http://localhost:3000", "http://localhost:8000"]` | CORS allowlist                            |
+| `APP_NAME`                    |    No    | `Tactica`                                            |                                           |
+| `APP_ENV`                     |    No    | `development`                                        |                                           |
+| `DEBUG`                       |    No    | `True`                                               | Enables SQLAlchemy `echo`                 |
+| `DATABASE_URL`                |   Yes    | —                                                    | Must be `postgresql+asyncpg://...`        |
+| `SECRET_KEY`                  |   Yes    | —                                                    | JWT signing secret                        |
+| `ALGORITHM`                   |    No    | `HS256`                                              |                                           |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` |    No    | `30`                                                 |                                           |
+| `SALT_ROUNDS`                 |    No    | `12`                                                 | bcrypt cost                               |
+| `OPENAI_API_KEY`              |   Yes    | —                                                    |                                           |
+| `OPENAI_MODEL`                |    No    | `gpt-4o-mini`                                        | Used by every agent                       |
+| `EMBEDDING_MODEL`             |    No    | `text-embedding-3-small`                             |                                           |
+| `VECTOR_DIMENSION`            |    No    | `1536`                                               | Must match the embedding model            |
+| `TAVILY_API_KEY`              |   Yes    | —                                                    | Used by pundits via the Tavily MCP server |
+| `ALLOWED_ORIGINS`             |    No    | `["http://localhost:3000", "http://localhost:8000"]` | CORS allowlist                            |
 
 ### Example `.env`
 
@@ -317,7 +298,7 @@ TAVILY_API_KEY=tvly-...
 
 ---
 
-## 🌐 API reference
+## API reference
 
 All routes are mounted under the `/api` prefix. Every protected route expects:
 
@@ -329,17 +310,17 @@ Authorization: Bearer <jwt>
 
 | Method | Path                                            | Auth | Purpose                                   |
 | :----: | ----------------------------------------------- | :--: | ----------------------------------------- |
-|  GET   | `/health`                                       |  ❌  | Liveness probe                            |
-|  POST  | `/api/auth/register`                            |  ❌  | Create user, return user object           |
-|  POST  | `/api/auth/login`                               |  ❌  | Verify credentials, return JWT            |
-|  GET   | `/api/auth/me`                                  |  ✅  | Get current user's profile                |
-| DELETE | `/api/auth/me`                                  |  ✅  | Delete the current user's account         |
-|  POST  | `/api/conversations/`                           |  ✅  | Create a new conversation                 |
-|  GET   | `/api/conversations/`                           |  ✅  | List the current user's conversations     |
-|  GET   | `/api/conversations/{conversation_id}`          |  ✅  | Fetch a single conversation               |
-| DELETE | `/api/conversations/{conversation_id}`          |  ✅  | Delete a conversation (cascades messages) |
-|  POST  | `/api/conversations/{conversation_id}/chat`     |  ✅  | **Run the full multi-agent pipeline**     |
-|  GET   | `/api/conversations/{conversation_id}/messages` |  ✅  | List all messages in a conversation       |
+|  GET   | `/health`                                       |  No  | Liveness probe                            |
+|  POST  | `/api/auth/register`                            |  No  | Create user, return user object           |
+|  POST  | `/api/auth/login`                               |  No  | Verify credentials, return JWT            |
+|  GET   | `/api/auth/me`                                  | Yes  | Get current user's profile                |
+| DELETE | `/api/auth/me`                                  | Yes  | Delete the current user's account         |
+|  POST  | `/api/conversations/`                           | Yes  | Create a new conversation                 |
+|  GET   | `/api/conversations/`                           | Yes  | List the current user's conversations     |
+|  GET   | `/api/conversations/{conversation_id}`          | Yes  | Fetch a single conversation               |
+| DELETE | `/api/conversations/{conversation_id}`          | Yes  | Delete a conversation (cascades messages) |
+|  POST  | `/api/conversations/{conversation_id}/chat`     | Yes  | **Run the pipeline, stream over SSE**     |
+|  GET   | `/api/conversations/{conversation_id}/messages` | Yes  | List all messages in a conversation       |
 
 <details>
 <summary><strong>POST /api/auth/register</strong> — 201 Created</summary>
@@ -392,7 +373,7 @@ Response:
 <details>
 <summary><strong>POST /api/conversations/</strong> — 201 Created</summary>
 
-Request (title is optional — if omitted, the `TitleAgent` will generate one after the first chat turn):
+Request (title is optional — if omitted, the `TitleAgent` generates one after the first chat turn):
 
 ```json
 { "title": "Champions League Debate" }
@@ -434,7 +415,7 @@ Returns the deleted conversation. Cascades through `message`, `message_citations
 </details>
 
 <details>
-<summary><strong>POST /api/conversations/{conversation_id}/chat</strong> — 200 OK</summary>
+<summary><strong>POST /api/conversations/{conversation_id}/chat</strong> — 200 OK (SSE stream)</summary>
 
 Request:
 
@@ -442,38 +423,41 @@ Request:
 { "message": "Was Barcelona's 2011 team better than Manchester City's treble side?" }
 ```
 
-Response:
+Response: `text/event-stream` — a stream of SSE events. Each event carries a JSON payload:
 
-```json
-{
-    "message": "<final pundit answer>",
-    "citations": [
-        { "source": "2024 Indian Premier League - wikipedia", "relevance_score": 0.48 },
-        { "source": "www.espn.com - SOCCER", "relevance_score": 0.59 }
-    ]
-}
+**Token event** (one per token, streamed in real time):
+
+```
+data: {"type": "token", "content": "Barcelona"}
+```
+
+**Citations event** (sent once at the end, signals the stream is complete):
+
+```
+data: {"type": "citations", "citations": [{"source": "FC Barcelona - wikipedia", "relevance_score": 0.48}]}
 ```
 
 Citations are deduplicated by source — only the highest relevance score is kept per unique source.
 
-What this endpoint actually does:
+What this endpoint does under the hood:
 
 1. Verifies the conversation belongs to the caller.
-2. Runs the **GuardrailAgent** (Wikipedia-tooled). If the prompt is not sports-related, returns a polite refusal immediately.
+2. Runs the **GuardrailAgent** (Wikipedia-tooled). If the prompt is not sports-related, streams a polite refusal and stops.
 3. Runs the **SportDetectorAgent** to tag the query (e.g. `football`, `tennis`, or `general`).
 4. Loads the last 10 messages as context, persists the user message.
 5. Runs the **TopicExtractorAgent** to extract the main sports entity (player, team, tournament).
 6. **Pre-ingests** the topic from Wikipedia + sport-specific RSS feeds before any pundit runs (RSS skipped if a non-Wikipedia document was ingested in the last 60 minutes).
-7. Spins up the five pundit agents and runs a **`SelectorGroupChat`** with a `candidate_func` that prevents repeats and forces `ModeratorPundit` after 3 specialists. Termination fires on `TERMINATE` or after 15 messages as a safety cap.
-8. Persists the assistant's final reply, plus citations into `message_citations`.
+7. Runs a **`SelectorGroupChat`** with a `candidate_func` that prevents repeats and forces `ModeratorPundit` after enough specialists have spoken. The Moderator's tokens are streamed to the client as they are generated.
+8. Persists the assistant's final reply, plus citations into `message_citations`, then sends the citations event.
 9. Runs the **MemoryWriter** agent over the exchange to extract durable facts into `conversation_memory`.
 10. If the conversation has no title yet, runs the **TitleAgent**.
+
 </details>
 
 <details>
 <summary><strong>GET /api/conversations/{conversation_id}/messages</strong> — 200 OK</summary>
 
-Response:
+Response (each assistant message also includes a deduplicated `citations` array):
 
 ```json
 [
@@ -482,6 +466,7 @@ Response:
         "conversation_id": "uuid",
         "role": "user",
         "content": "...",
+        "citations": [],
         "created_at": "2026-05-05T10:01:00Z"
     },
     {
@@ -489,6 +474,7 @@ Response:
         "conversation_id": "uuid",
         "role": "assistant",
         "content": "...",
+        "citations": [{ "source": "FC Barcelona - wikipedia", "relevance_score": 0.48 }],
         "created_at": "2026-05-05T10:01:05Z"
     }
 ]
@@ -516,8 +502,8 @@ CID=$(curl -s -X POST http://127.0.0.1:8000/api/conversations/ \
   -H "Content-Type: application/json" \
   -d '{}' | jq -r '.id')
 
-# 4. Talk to the pundit
-curl -X POST "http://127.0.0.1:8000/api/conversations/$CID/chat" \
+# 4. Talk to the pundit (streams SSE)
+curl -N -X POST "http://127.0.0.1:8000/api/conversations/$CID/chat" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"Who had the greater peak — Messi or Maradona?"}'
@@ -529,9 +515,9 @@ curl "http://127.0.0.1:8000/api/conversations/$CID/messages" \
 
 ---
 
-## 🤖 Agent pipeline
+## Agent pipeline
 
-All agents are `autogen_agentchat.agents.AssistantAgent` instances backed by the same `OpenAIChatCompletionClient`. They are split into two layers:
+All agents are `autogen_agentchat.agents.AssistantAgent` instances backed by the same `OpenAIChatCompletionClient`, split into two layers.
 
 ### Pre-pipeline agents
 
@@ -550,20 +536,21 @@ All agents are `autogen_agentchat.agents.AssistantAgent` instances backed by the
 | **DebaterPundit**     | Fact-checks claims and surfaces opposing viewpoints                            |
 | **PredictorPundit**   | Makes bold, evidence-based predictions about outcomes, careers, and trends     |
 | **TacticsPundit**     | Breaks down tactical formations, game plans, and coaching decisions            |
+| **QueryPundit**       | Answers simpler direct questions using Tavily web search                       |
 | **ModeratorPundit**   | Synthesizes everything into a single opinionated answer; ends with `TERMINATE` |
 
-The team is governed by a **`candidate_func`** that prevents agents from being selected twice and forces `ModeratorPundit` once 3 specialists have spoken. A **`selector_prompt`** further guides the LLM to pick the most relevant unspoken specialist for each turn.
+The team is governed by a **`candidate_func`** that prevents agents from being selected twice and forces `ModeratorPundit` once enough specialists have spoken. A **`selector_prompt`** further guides the LLM to pick the most relevant unspoken specialist for each turn. The Moderator runs with `model_client_stream=True` so its tokens can be streamed to the client.
 
 ### Side-effect agents
 
 | Agent            | Job                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------ |
 | **MemoryWriter** | Reads the user/assistant exchange and writes useful facts into `conversation_memory` |
-| **TitleAgent**   | Generates a ≤6-word title for the conversation if it doesn't have one yet            |
+| **TitleAgent**   | Generates a short title for the conversation if it doesn't have one yet              |
 
 ---
 
-## 🛠️ Agent tools
+## Agent tools
 
 All tools are `FunctionTool` wrappers around async Python functions in `app/agents/tools.py`. Each one is a thin wrapper over the RAG / ingestion services.
 
@@ -585,11 +572,10 @@ Whenever a search tool returns a hit, the document's `(id, score)` is recorded i
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
 The backend is functional end-to-end. Known follow-ups:
 
-- **Frontend.** Build the Next.js client.
 - **Richer ingestion.** More sources beyond Wikipedia + RSS; an internal admin endpoint to trigger ingestion explicitly.
 - **Observability.** Per-turn traces for retrieval quality, tool calls, and agent decisions.
 
