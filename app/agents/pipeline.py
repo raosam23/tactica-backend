@@ -1,7 +1,9 @@
-import uuid
-from typing import List, Optional, AsyncGenerator
 import json
+import uuid
+from typing import AsyncGenerator, List, Optional
 
+from autogen_agentchat.base import TaskResult
+from autogen_agentchat.messages import ModelClientStreamingChunkEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -18,8 +20,6 @@ from app.services.ingestion_service import (check_if_existing_rss_docs_recent,
 from app.services.message_service import (CreateMessageCitationService,
                                           CreateMessageService,
                                           GetMessagesService)
-from autogen_agentchat.messages import ModelClientStreamingChunkEvent
-from autogen_agentchat.base import TaskResult
 
 
 def _handle_citation_deduplications(citations: List[CitationResponse]) -> List[CitationResponse]:

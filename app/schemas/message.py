@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 from app.models.message import Role as RoleType
+
 
 class CitationResponse(BaseModel):
     source: str = Field(description="The source of the citation")

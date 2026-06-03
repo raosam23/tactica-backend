@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models import Message, MessageCitation, User
-from app.models.message import Role as RoleType
 from app.models.document import Document
+from app.models.message import Role as RoleType
 from app.schemas.message import CitationResponse, MessageResponse
 from app.services.conversation_service import GetConversationService
 
