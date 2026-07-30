@@ -90,12 +90,16 @@ async def run_chat_pipeline(
         rss_feeds = []
     else:
         rss_feeds = SPORT_RSS_FEEDS.get(detected_sport, SPORT_RSS_FEEDS["general"])
-    await run_ingestion(
-        session=session,
-        wiki_titles=[extracted_topic],
-        rss_urls=rss_feeds,
-        sport=detected_sport,
-    )
+    try:
+        await run_ingestion(
+            session=session,
+            wiki_titles=[extracted_topic],
+            rss_urls=rss_feeds,
+            sport=detected_sport,
+        )
+    except Exception:
+        # Ingestion is best-effort; pundits can still answer via memory/Tavily/existing docs
+        pass
 
     final_response = ""
     async for event in team.run_stream(task=task):

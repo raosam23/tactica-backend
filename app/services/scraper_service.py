@@ -31,12 +31,16 @@ async def scrape_wikipedia_articles(
         "format": "json",
     }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-
     results = []
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, params=params, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+    except (httpx.HTTPError, httpx.TimeoutException):
+        # Don't fail the chat pipeline if Wikipedia is slow/unreachable (common in Docker)
+        return results
+
     query = data.get("query", {})
     pages = query.get("pages", {})
     for page in pages.values():

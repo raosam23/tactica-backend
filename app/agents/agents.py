@@ -1,3 +1,4 @@
+import shutil
 import uuid
 from typing import Dict, List, Optional, Tuple
 
@@ -25,10 +26,19 @@ async def create_pundit_agents(
         FunctionTool(tools["add_memory"], name="add_memory", description="Use this tool to add important facts, conclusions, or key information from the conversation into the memory for future reference.")
     ]
 
+    # Prefer a preinstalled binary (Docker image installs tavily-mcp globally).
+    # Fall back to npx for local non-Docker runs.
+    if shutil.which("tavily-mcp"):
+        tavily_command, tavily_args = "tavily-mcp", []
+    else:
+        tavily_command, tavily_args = "npx", ["-y", "tavily-mcp"]
+
     tavily_server_params = StdioServerParams(
-        command="npx",
-        args=["-y", "tavily-mcp"],
+        command=tavily_command,
+        args=tavily_args,
         env={"TAVILY_API_KEY": settings.TAVILY_API_KEY},
+        # MCP handshake can be slow on first start; default 5s is too tight in Docker
+        read_timeout_seconds=60,
     )
     tavily_tools = await mcp_server_tools(tavily_server_params)
 
