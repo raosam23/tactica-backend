@@ -5,8 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.document import Document
-from app.services import (chunk_documents, generate_embeddings_batch,
-                          scrape_rss_feeds, scrape_wikipedia_articles)
+from app.services import (
+    chunk_documents,
+    generate_embeddings_batch,
+    scrape_rss_feeds,
+    scrape_wikipedia_articles,
+)
 
 
 async def run_ingestion(
@@ -15,7 +19,7 @@ async def run_ingestion(
     rss_urls: List[str],
     sport: Optional[str] = None,
     chunk_size: int = 500,
-    chunk_overlap: int = 50
+    chunk_overlap: int = 50,
 ) -> Dict[str, int]:
     """
     Run the full ingestion pipline: scrape -> chunk -> embed -> store
@@ -40,7 +44,9 @@ async def run_ingestion(
 
     # --- Step 2: Chunking documents while preserving metadata ---
     chunks = chunk_documents(all_docs, chunk_size, chunk_overlap)
-    chunks = [chunk for chunk in chunks if chunk.get("content", "").strip()] # Filter out empty chunks
+    chunks = [
+        chunk for chunk in chunks if chunk.get("content", "").strip()
+    ]  # Filter out empty chunks
 
     if not chunks:
         return {"scrapped": len(all_docs), "chunks": 0, "embeddings": 0, "stored": 0}
@@ -50,7 +56,7 @@ async def run_ingestion(
     # embeddings = await generate_embeddings_batch(texts)
     all_embeddings = []
     for idx in range(0, len(texts), 2048):
-        batch = texts[idx: idx + 2048]
+        batch = texts[idx : idx + 2048]
         batch_result = await generate_embeddings_batch(batch)
         all_embeddings.extend(batch_result)
 
@@ -89,7 +95,10 @@ async def check_if_existing_rss_docs_recent(
     Returns:
         bool: True if there are recent RSS documents, False otherwise."""
     query_result = await session.execute(
-        select(Document).where(Document.source != "wikipedia").order_by(Document.created_at.desc()).limit(1)
+        select(Document)
+        .where(Document.source != "wikipedia")
+        .order_by(Document.created_at.desc())
+        .limit(1)
     )
     document = query_result.scalars().first()
     if not document:

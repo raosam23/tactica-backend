@@ -11,16 +11,20 @@ class MessageCitation(SQLModel, table=True):
     __tablename__ = "message_citations"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    message_id: uuid.UUID = Field(sa_column=Column(
-        UUID(as_uuid=True),
-        ForeignKey("message.id", ondelete="CASCADE"),
-        nullable=False,
-    ))
-    document_id: uuid.UUID = Field(sa_column=Column(
-        UUID(as_uuid=True),
-        ForeignKey("document.id", ondelete="CASCADE"),
-        nullable=False,
-    ))
+    message_id: uuid.UUID = Field(
+        sa_column=Column(
+            UUID(as_uuid=True),
+            ForeignKey("message.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    document_id: uuid.UUID = Field(
+        sa_column=Column(
+            UUID(as_uuid=True),
+            ForeignKey("document.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
     relevance_score: Optional[float] = Field(default=None)
     message: Optional["Message"] = Relationship(back_populates="citations")  # type: ignore
-    document: Optional["Document"] = Relationship(back_populates="citations") # type: ignore
+    document: Optional["Document"] = Relationship(back_populates="citations")  # type: ignore

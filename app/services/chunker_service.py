@@ -12,11 +12,13 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
         List[str]: A list of chunks
     """
     if chunk_size <= 0 or overlap < 0 or overlap >= chunk_size:
-        raise ValueError("chunk_size must be > 0 and overlap must be >= 0 and < chunk_size")
-    
+        raise ValueError(
+            "chunk_size must be > 0 and overlap must be >= 0 and < chunk_size"
+        )
+
     if len(text) <= chunk_size:
         return [text]
-    
+
     chunks = []
     start = 0
     while start < len(text):
@@ -25,7 +27,10 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]
         start += chunk_size - overlap
     return chunks
 
-def chunk_documents(documents: List[dict], chunk_size: int = 500, chunk_overlap: int = 50) -> List[Dict[str, Any]]:
+
+def chunk_documents(
+    documents: List[dict], chunk_size: int = 500, chunk_overlap: int = 50
+) -> List[Dict[str, Any]]:
     """
     Chunk multiple documents' content while preserving metadata
 
@@ -40,14 +45,16 @@ def chunk_documents(documents: List[dict], chunk_size: int = 500, chunk_overlap:
     for doc in documents:
         text_chunks = chunk_text(doc["content"], chunk_size, chunk_overlap)
         for chunk in text_chunks:
-            all_chunks.append({
-                "content": chunk,
-                "source": doc["source"],
-                "sport": doc.get("sport", None),
-                "tags": doc.get("tags", []),
-                "metadata_": {
-                    "title": doc.get("title", ""),
-                    "url": doc.get("url", ""),
+            all_chunks.append(
+                {
+                    "content": chunk,
+                    "source": doc["source"],
+                    "sport": doc.get("sport", None),
+                    "tags": doc.get("tags", []),
+                    "metadata_": {
+                        "title": doc.get("title", ""),
+                        "url": doc.get("url", ""),
+                    },
                 }
-            })
+            )
     return all_chunks
