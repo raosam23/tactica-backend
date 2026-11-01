@@ -12,6 +12,7 @@
   <img alt="OpenAI"    src="https://img.shields.io/badge/OpenAI-gpt--4o--mini-111111?style=flat-square&logo=openai&logoColor=white" />
   <img alt="AutoGen"   src="https://img.shields.io/badge/AutoGen-AgentChat-FF6B35?style=flat-square" />
   <img alt="Status"    src="https://img.shields.io/badge/status-complete-success?style=flat-square" />
+  <img alt="CI"        src="https://github.com/raosam23/tactica-backend/actions/workflows/ci.yml/badge.svg" />
 </p>
 
 <sub>Backend repository · <a href="https://github.com/raosam23/tactica-frontend">Frontend repository →</a></sub>
@@ -28,6 +29,7 @@
 - [Tech stack](#tech-stack)
 - [Project layout](#project-layout)
 - [Database schema](#database-schema)
+- [Testing](#testing)
 - [Getting started](#getting-started)
 - [Environment variables](#environment-variables)
 - [API reference](#api-reference)
@@ -198,6 +200,73 @@ Six tables, all migrated via Alembic:
 | `conversation_memory` | **Per-conversation memory** — extracted facts/opinions, embedded for vector lookup                   |
 
 Foreign keys use `ON DELETE CASCADE`, so deleting a conversation cleans up its messages and memory automatically.
+
+---
+
+## Testing
+
+The test suite uses **pytest** with **pytest-asyncio** for async tests. All tests are fast and deterministic — they mock external dependencies (OpenAI, database, HTTP) and require no network access or API keys.
+
+### Run tests locally
+
+```bash
+# Install dev dependencies (includes pytest, pytest-asyncio, pytest-cov)
+uv sync --dev
+
+# Run all tests
+uv run pytest
+
+# Run with coverage report
+uv run pytest --cov=app --cov-report=term-missing
+
+# Run specific test file
+uv run pytest tests/test_chunker_service.py
+
+# Run tests matching a pattern
+uv run pytest -k "guardrail"
+```
+
+### Test structure
+
+```
+tests/
+├── conftest.py                 # Shared fixtures (mock DB, user, embeddings)
+├── test_auth_endpoints.py      # /api/auth/* endpoint tests
+├── test_chunker_service.py     # Text chunking logic
+├── test_conversation_endpoints.py  # /api/conversations/* + SSE streaming
+├── test_embedding_service.py   # OpenAI embedding mocks
+├── test_pipeline.py            # Guardrail, sport detection, citation dedup
+├── test_rag_service.py         # Vector search services
+├── test_scraper_service.py     # Wikipedia & RSS scraping
+└── test_security.py            # JWT, password hashing
+```
+
+### What's tested
+
+| Area | Coverage |
+| ---- | -------- |
+| **Chunker service** | `chunk_text`, `chunk_documents`, edge cases, metadata preservation |
+| **Security** | Password hashing, JWT creation/decoding, token validation |
+| **Auth endpoints** | Register, login, get current user, delete account |
+| **Conversation endpoints** | CRUD operations, SSE streaming format, error responses |
+| **Pipeline** | Guardrail patterns, sport detection, citation deduplication, candidate selection |
+| **RAG service** | Vector search, conversation memory, tool functions |
+| **Scraper service** | Wikipedia API, RSS feed parsing, error handling |
+| **Embedding service** | Single and batch embedding with mocked OpenAI client |
+
+### Mocking strategy
+
+Tests mock external dependencies at the boundary to keep them fast and isolated:
+
+- **Database**: `AsyncMock` sessions with configurable return values
+- **OpenAI**: Patched client returning deterministic 1536-dim vectors
+- **HTTP**: `httpx` responses mocked for Wikipedia API
+- **RSS**: `feedparser.parse` mocked with sample feed data
+- **FastAPI deps**: `get_session` and `get_current_user` overridden via `app.dependency_overrides`
+
+### CI
+
+GitHub Actions runs lint (ruff), type check (pyright), and tests on every push and PR. See `.github/workflows/ci.yml`.
 
 ---
 
