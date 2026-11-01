@@ -1,7 +1,6 @@
 from typing import Dict
 
-from autogen_agentchat.conditions import (MaxMessageTermination,
-                                          TextMentionTermination)
+from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
@@ -13,31 +12,36 @@ async def candidate_selector_function(messages):
         "DebaterPundit",
         "PredictorPundit",
         "TacticsPundit",
-        "QueryPundit"
+        "QueryPundit",
     ]
 
-    spoken_agents = {message.source for message in messages if hasattr(message, "source")}
+    spoken_agents = {
+        message.source for message in messages if hasattr(message, "source")
+    }
 
     if "ModeratorPundit" in spoken_agents:
         return ["ModeratorPundit"]
-    
+
     spoken_specialists = [name for name in specialist_names if name in spoken_agents]
 
     if len(spoken_specialists) >= 4:
         return ["ModeratorPundit"]
-    
-    remaining_specialists = [name for name in specialist_names if name not in spoken_agents]
-    
+
+    remaining_specialists = [
+        name for name in specialist_names if name not in spoken_agents
+    ]
+
     if not remaining_specialists:
         return ["ModeratorPundit"]
-    
+
     return remaining_specialists
+
 
 async def create_pundit_team(
     agents: Dict,
     model_client: OpenAIChatCompletionClient,
 ) -> SelectorGroupChat:
-    
+
     stats_agent = agents["stats_agent"]
     storyteller_agent = agents["storyteller_agent"]
     debater_agent = agents["debater_agent"]
@@ -63,11 +67,19 @@ async def create_pundit_team(
     """
 
     team = SelectorGroupChat(
-        participants=[stats_agent, storyteller_agent, debater_agent, predictor_agent, tactics_agent, query_agent, moderator_agent],
+        participants=[
+            stats_agent,
+            storyteller_agent,
+            debater_agent,
+            predictor_agent,
+            tactics_agent,
+            query_agent,
+            moderator_agent,
+        ],
         model_client=model_client,
         selector_prompt=selector_prompt,
         candidate_func=candidate_selector_function,
-        termination_condition=termination
+        termination_condition=termination,
     )
 
     return team

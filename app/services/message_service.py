@@ -12,20 +12,30 @@ from app.schemas.message import CitationResponse, MessageResponse
 from app.services.conversation_service import GetConversationService
 
 
-async def GetMessagesService(session: AsyncSession, user: User, conversation_id: uuid.UUID) -> List[MessageResponse]:
+async def GetMessagesService(
+    session: AsyncSession, user: User, conversation_id: uuid.UUID
+) -> List[MessageResponse]:
     """Service to retrieve all messages for a conversation."""
     conversation = await GetConversationService(session, user, conversation_id)
-    result = await session.execute(select(Message).where(Message.conversation_id == conversation.id).order_by(Message.created_at.asc()))
+    result = await session.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation.id)
+        .order_by(Message.created_at.asc())
+    )
     messages = result.scalars().all()
     message_response = []
     for message in messages:
-        citation_result = await session.execute(select(MessageCitation).where(MessageCitation.message_id == message.id))
+        citation_result = await session.execute(
+            select(MessageCitation).where(MessageCitation.message_id == message.id)
+        )
         message_citations = citation_result.scalars().all()
 
         citations = []
         if message_citations:
             doc_ids = [citation.document_id for citation in message_citations]
-            docs_result = await session.execute(select(Document).where(Document.id.in_(doc_ids)))
+            docs_result = await session.execute(
+                select(Document).where(Document.id.in_(doc_ids))
+            )
             documents = {doc.id: doc for doc in docs_result.scalars().all()}
             unique_citations: dict[str, float | None] = {}
             for citation in message_citations:
@@ -34,32 +44,29 @@ async def GetMessagesService(session: AsyncSession, user: User, conversation_id:
                     if source not in unique_citations:
                         unique_citations[source] = citation.relevance_score
                     else:
-                        unique_citations[source] = max(unique_citations[source], citation.relevance_score)
+                        unique_citations[source] = max(
+                            unique_citations[source], citation.relevance_score
+                        )
             for source, score in unique_citations.items():
-                citations.append(
-                    CitationResponse(
-                        source=source,
-                        relevance_score=score
-                    )
-                )
-        message_response.append(MessageResponse(
-            id=message.id,
-            conversation_id=message.conversation_id,
-            role=message.role,
-            content=message.content,
-            created_at=message.created_at,
-            citations=citations
-        ))
+                citations.append(CitationResponse(source=source, relevance_score=score))
+        message_response.append(
+            MessageResponse(
+                id=message.id,
+                conversation_id=message.conversation_id,
+                role=message.role,
+                content=message.content,
+                created_at=message.created_at,
+                citations=citations,
+            )
+        )
     return message_response
-            
 
-async def CreateMessageService(session: AsyncSession, conversation_id: uuid.UUID, role: RoleType, content: str) -> MessageResponse:
+
+async def CreateMessageService(
+    session: AsyncSession, conversation_id: uuid.UUID, role: RoleType, content: str
+) -> MessageResponse:
     """Service to create a new message in a conversation."""
-    new_message = Message(
-        conversation_id=conversation_id,
-        role=role,
-        content=content
-    )
+    new_message = Message(conversation_id=conversation_id, role=role, content=content)
     session.add(new_message)
     await session.commit()
     await session.refresh(new_message)
@@ -69,22 +76,29 @@ async def CreateMessageService(session: AsyncSession, conversation_id: uuid.UUID
         role=new_message.role,
         content=new_message.content,
         created_at=new_message.created_at,
-        citations=[]
+        citations=[],
     )
 
-async def CreateMessageCitationService(session: AsyncSession, message_id: uuid.UUID, cited_documents: List[Tuple[uuid.UUID, float]]):
+
+async def CreateMessageCitationService(
+    session: AsyncSession,
+    message_id: uuid.UUID,
+    cited_documents: List[Tuple[uuid.UUID, float]],
+):
     """Service to add cited documents of a message into the database."""
     message = await session.get(Message, message_id)
     if not message:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Message not found"
+        )
     unique_citations: dict[uuid.UUID, float] = {}
     for doc_id, score in cited_documents:
         if doc_id not in unique_citations or score < unique_citations[doc_id]:
             unique_citations[doc_id] = score
     for doc_id, score in unique_citations.items():
-        session.add(MessageCitation(
-            message_id=message_id,
-            document_id=doc_id,
-            relevance_score=score
-        ))
+        session.add(
+            MessageCitation(
+                message_id=message_id, document_id=doc_id, relevance_score=score
+            )
+        )
     await session.commit()

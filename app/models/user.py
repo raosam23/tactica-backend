@@ -17,9 +17,7 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
-            DateTime(timezone=True),
-            server_default=func.now(),
-            nullable=False
-        )
+            DateTime(timezone=True), server_default=func.now(), nullable=False
+        ),
     )
-    conversations: List["Conversation"] = Relationship(back_populates = "user") # type: ignore
+    conversations: List["Conversation"] = Relationship(back_populates="user")  # type: ignore

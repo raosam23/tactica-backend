@@ -4,16 +4,23 @@ from typing import Callable, Dict, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import SPORT_RSS_FEEDS
-from app.services.ingestion_service import (check_if_existing_rss_docs_recent,
-                                            run_ingestion)
-from app.services.rag_service import (AddConversationMemoryService,
-                                      SearchConversationMemoryService,
-                                      SearchDocumentsService)
+from app.services.ingestion_service import (
+    check_if_existing_rss_docs_recent,
+    run_ingestion,
+)
+from app.services.rag_service import (
+    AddConversationMemoryService,
+    SearchConversationMemoryService,
+    SearchDocumentsService,
+)
 from app.services.scraper_service import scrape_wikipedia_articles
 
 
-def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optional[str] = None) -> Tuple[Dict[str, Callable[..., str]], List]:
+def make_tools(
+    session: AsyncSession, conversation_id: uuid.UUID, sport: Optional[str] = None
+) -> Tuple[Dict[str, Callable[..., str]], List]:
     cited_documents = []
+
     async def search_stats(query: str) -> str:
         """Find factual sports statistics for a specific query.
 
@@ -29,7 +36,9 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             A numbered plain-text list of relevant statistical snippets and
             their sources, or a fallback message when nothing relevant is found.
         """
-        search_results = await SearchDocumentsService(session, query, sport=sport, limit=5)
+        search_results = await SearchDocumentsService(
+            session, query, sport=sport, limit=5
+        )
         if not search_results:
             return "No relevant stats found."
         response = "Here are some stats that might be relevant:\n"
@@ -53,7 +62,9 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             A numbered plain-text list of relevant article-style snippets and
             their sources, or a fallback message when nothing relevant is found.
         """
-        search_results = await SearchDocumentsService(session, query, sport=sport, limit=5)
+        search_results = await SearchDocumentsService(
+            session, query, sport=sport, limit=5
+        )
         if not search_results:
             return "No relevant articles found."
         response = "Here are some articles that might be relevant:\n"
@@ -82,7 +93,9 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             return "No players provided for comparison."
         response = "Comparing players:\n"
         for player in players:
-            results = await SearchDocumentsService(session, player, sport=sport, limit=5)
+            results = await SearchDocumentsService(
+                session, player, sport=sport, limit=5
+            )
             if results:
                 response += f"\nStats and achievements for {player}:\n"
                 for idx, (doc, score) in enumerate(results, start=1):
@@ -106,7 +119,9 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             A numbered plain-text list of evidence snippets and their sources,
             or a fallback message when no relevant evidence is found.
         """
-        search_results = await SearchDocumentsService(session, statement, sport=sport, limit=5)
+        search_results = await SearchDocumentsService(
+            session, statement, sport=sport, limit=5
+        )
         if not search_results:
             return "No relevant information found to fact-check the statement."
         response = "Fact-checking results:\n"
@@ -130,10 +145,14 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             A numbered plain-text list of potentially opposing evidence and
             sources, or a fallback message when no relevant evidence is found.
         """
-        search_results = await SearchDocumentsService(session, topic, sport=sport, limit=5)
+        search_results = await SearchDocumentsService(
+            session, topic, sport=sport, limit=5
+        )
         if not search_results:
             return "No relevant information found presenting opposing viewpoints."
-        response = "Here are some perspectives that might present opposing viewpoints:\n"
+        response = (
+            "Here are some perspectives that might present opposing viewpoints:\n"
+        )
         for idx, (doc, score) in enumerate(search_results, start=1):
             response += f"{idx}. {doc.content} (Source: {doc.source})\n"
             cited_documents.append((doc.id, score))
@@ -154,7 +173,9 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             A numbered plain-text list of relevant memory snippets and their
             source types, or a fallback message when no relevant memory is found.
         """
-        search_results = await SearchConversationMemoryService(session, conversation_id, query, limit=5)
+        search_results = await SearchConversationMemoryService(
+            session, conversation_id, query, limit=5
+        )
         if not search_results:
             return "No relevant memory found for the query."
         response = "Here are some relevant memories from past conversations:\n"
@@ -182,12 +203,11 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
         else:
             rss_urls = SPORT_RSS_FEEDS.get(sport, SPORT_RSS_FEEDS["general"])
         await run_ingestion(
-            session=session,
-            wiki_titles=[query],
-            rss_urls=rss_urls,
-            sport=sport
+            session=session, wiki_titles=[query], rss_urls=rss_urls, sport=sport
         )
-        search_results = await SearchDocumentsService(session, query, sport=sport, limit=5)
+        search_results = await SearchDocumentsService(
+            session, query, sport=sport, limit=5
+        )
         if not search_results:
             return "No relevant information found after ingestion."
         response = "Here are some relevant results after ingestion:\n"
@@ -195,17 +215,19 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             response += f"{idx}. {doc.content} (Source: {doc.source})\n"
             cited_documents.append((doc.id, score))
         return response
-    
+
     async def get_historical_parallel(event: str) -> str:
         """Find historical sports event or moments that are similar or parallel to the current topic being discussed.
-        
+
         Args:
             event(str): The sports event, moment, player, team, or storyline for which to find historical parallels.
 
         Returns:
             str: A numbered plain-text list of historical parallels with brief explanations and their sources, or a fallback message when no relevant parallels are found.
         """
-        search_results = await SearchDocumentsService(session, event, sport=sport, limit=5)
+        search_results = await SearchDocumentsService(
+            session, event, sport=sport, limit=5
+        )
         if not search_results:
             return "No relevant historical parallels found."
         response = "Here are some historical sports events or moments that might be parallel to the current topic:\n"
@@ -213,10 +235,10 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             response += f"{idx}. {doc.content} (Source: {doc.source})\n"
             cited_documents.append((doc.id, score))
         return response
-    
+
     async def add_memory(content: str, source_type: str) -> str:
         """Store a key fact, conclusion, or important piece of information from the conversation into the memory for future reference.
-        
+
         Args:
             content(str): The content to be stored in memory, such as a key fact, conclusion, or important piece of information from the conversation.
             source_type(str): The type of the memory source (e.g., user_statement, ai_response, fact, story, etc.) to provide context about the origin of the memory.
@@ -224,22 +246,28 @@ def make_tools(session: AsyncSession, conversation_id: uuid.UUID, sport: Optiona
             str: A confirmation string indicating that the memory has been successfully stored, or an error message if the operation fails.
         """
         try:
-            await AddConversationMemoryService(session, conversation_id, content, source_type, metadata={})
+            await AddConversationMemoryService(
+                session, conversation_id, content, source_type, metadata={}
+            )
             return "Memory added successfully."
         except Exception:
             return "Failed to add memory."
-            
-    return ({
-        "search_stats": search_stats,
-        "search_articles": search_articles,
-        "compare_players": compare_players,
-        "fact_check": fact_check,
-        "search_opposing_view": search_opposing_view,
-        "search_memory": search_memory,
-        "ingest_and_search": ingest_and_search,
-        "get_historical_parallel": get_historical_parallel,
-        "add_memory": add_memory,
-    }, cited_documents)
+
+    return (
+        {
+            "search_stats": search_stats,
+            "search_articles": search_articles,
+            "compare_players": compare_players,
+            "fact_check": fact_check,
+            "search_opposing_view": search_opposing_view,
+            "search_memory": search_memory,
+            "ingest_and_search": ingest_and_search,
+            "get_historical_parallel": get_historical_parallel,
+            "add_memory": add_memory,
+        },
+        cited_documents,
+    )
+
 
 async def search_wikipedia(query: str) -> str:
     """Search Wikipedia for a person, team, event, or topic to determine if it is sports-related.

@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Application configuration."""
+
     APP_NAME: str = "Tactica"
     APP_ENV: str = "development"
     DEBUG: bool = True
@@ -21,11 +22,15 @@ class Settings(BaseSettings):
     """TAVILY configuration."""
     TAVILY_API_KEY: str
     """CORS configuration."""
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000",]
-    
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ]
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
 
 settings = Settings()
 

@@ -15,35 +15,47 @@ from app.models import Conversation, Document
 from app.models.message import Role
 from app.models.user import User
 from app.schemas.message import CitationResponse
-from app.services.ingestion_service import (check_if_existing_rss_docs_recent,
-                                            run_ingestion)
-from app.services.message_service import (CreateMessageCitationService,
-                                          CreateMessageService,
-                                          GetMessagesService)
+from app.services.ingestion_service import (
+    check_if_existing_rss_docs_recent,
+    run_ingestion,
+)
+from app.services.message_service import (
+    CreateMessageCitationService,
+    CreateMessageService,
+    GetMessagesService,
+)
 
 
-def _handle_citation_deduplications(citations: List[CitationResponse]) -> List[CitationResponse]:
+def _handle_citation_deduplications(
+    citations: List[CitationResponse],
+) -> List[CitationResponse]:
     """Deduplicate citations based on their source, keeping the one with the highest relevance score."""
     unique_citations = {}
     for citation in citations:
         if citation.source not in unique_citations:
             unique_citations[citation.source] = citation.relevance_score
         else:
-            unique_citations[citation.source] = max(unique_citations[citation.source], citation.relevance_score)
-    return [CitationResponse(source=source, relevance_score=relevance_score) for source, relevance_score in unique_citations.items()]
+            unique_citations[citation.source] = max(
+                unique_citations[citation.source], citation.relevance_score
+            )
+    return [
+        CitationResponse(source=source, relevance_score=relevance_score)
+        for source, relevance_score in unique_citations.items()
+    ]
+
 
 async def run_chat_pipeline(
     session: AsyncSession,
     conversation_id: uuid.UUID,
     user_message: str,
     user: User,
-    sport: Optional[str] = None
+    sport: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     model_client = create_model_client()
 
     # Create pipeline agents that does not need sport
     pipeline_agents = create_pipeline_agents(model_client)
-    
+
     guardrail_result = await pipeline_agents["guardrail_agent"].run(task=user_message)
     guardrail_response = guardrail_result.messages[-1].content.strip().upper()
 
@@ -53,16 +65,18 @@ async def run_chat_pipeline(
             yield f"data: {json.dumps({'type': 'token', 'content': word + ' '})}\n\n"
         yield f"data: {json.dumps({'type': 'citations', 'citations': []})}\n\n"
         return
-    
+
     if sport is None:
-        sport_result = await pipeline_agents["sport_detector_agent"].run(task=user_message)
+        sport_result = await pipeline_agents["sport_detector_agent"].run(
+            task=user_message
+        )
         detected_sport = sport_result.messages[-1].content.strip().lower()
     else:
         detected_sport = sport.strip().lower()
 
     if detected_sport == "general":
         detected_sport = None
-    
+
     # Get N past messages for context
     messages = await GetMessagesService(session, user, conversation_id)
     messages_for_context = messages[-10:] if len(messages) > 10 else messages
@@ -71,11 +85,18 @@ async def run_chat_pipeline(
     await CreateMessageService(session, conversation_id, Role.USER, user_message)
 
     # Create pundit agents that may need sport
-    pundit_agent, cited_documents = await create_pundit_agents(session, conversation_id, detected_sport, model_client)
+    pundit_agent, cited_documents = await create_pundit_agents(
+        session, conversation_id, detected_sport, model_client
+    )
     team = await create_pundit_team(pundit_agent, model_client)
 
     if messages_for_context:
-        context = "\n\n".join([f"{message.role.value.capitalize()}: {message.content}" for message in messages_for_context])
+        context = "\n\n".join(
+            [
+                f"{message.role.value.capitalize()}: {message.content}"
+                for message in messages_for_context
+            ]
+        )
         task = (
             "Here are the past few messages in the conversation for context:\n\n"
             f"{context}\n\n"
@@ -84,7 +105,9 @@ async def run_chat_pipeline(
     else:
         task = user_message
 
-    topic_extractor_result = await pipeline_agents["topic_extractor_agent"].run(task=user_message)
+    topic_extractor_result = await pipeline_agents["topic_extractor_agent"].run(
+        task=user_message
+    )
     extracted_topic = topic_extractor_result.messages[-1].content.strip()
     if await check_if_existing_rss_docs_recent(session):
         rss_feeds = []
@@ -103,38 +126,52 @@ async def run_chat_pipeline(
 
     final_response = ""
     async for event in team.run_stream(task=task):
-        if isinstance(event, ModelClientStreamingChunkEvent) and (event.source == "ModeratorPundit"):
+        if isinstance(event, ModelClientStreamingChunkEvent) and (
+            event.source == "ModeratorPundit"
+        ):
             final_response += event.content
             if "TERMINATE" not in event.content:
                 yield f"data: {json.dumps({'type': 'token', 'content': event.content})}\n\n"
         elif isinstance(event, TaskResult):
             final_response = final_response.replace("TERMINATE", "").strip()
             if not final_response:
-                final_response = "Sorry, I wasn't able to generate a response. Please try again."
+                final_response = (
+                    "Sorry, I wasn't able to generate a response. Please try again."
+                )
                 for word in final_response.split():
                     yield f"data: {json.dumps({'type': 'token', 'content': word + ' '})}\n\n"
-            conversation_summary = f"User: {user_message}\n\nAssistant: {final_response}"
+            conversation_summary = (
+                f"User: {user_message}\n\nAssistant: {final_response}"
+            )
 
             # Create assistant message in database
-            message = await CreateMessageService(session, conversation_id, Role.ASSISTANT, final_response)
+            message = await CreateMessageService(
+                session, conversation_id, Role.ASSISTANT, final_response
+            )
             citations = []
             if cited_documents:
                 await CreateMessageCitationService(session, message.id, cited_documents)
                 doc_ids = [doc_id for doc_id, _ in cited_documents]
-                docs_result = await session.execute(select(Document).where(Document.id.in_(doc_ids)))
+                docs_result = await session.execute(
+                    select(Document).where(Document.id.in_(doc_ids))
+                )
                 documents = {doc.id: doc for doc in docs_result.scalars().all()}
                 for doc_id, relevance_score in cited_documents:
                     if doc_id in documents:
                         citations.append(
                             CitationResponse(
                                 source=f"{documents[doc_id].metadata_.get('title', 'Unknown Title')} - {documents[doc_id].source}",
-                                relevance_score=relevance_score
+                                relevance_score=relevance_score,
                             )
                         )
             citations = _handle_citation_deduplications(citations)
-            await pundit_agent["memory_writer_agent"].run(task=conversation_summary,)
+            await pundit_agent["memory_writer_agent"].run(
+                task=conversation_summary,
+            )
 
-            result = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+            result = await session.execute(
+                select(Conversation).where(Conversation.id == conversation_id)
+            )
             conversation = result.scalar_one_or_none()
             if conversation and not conversation.title:
                 title_result = await pundit_agent["title_agent"].run(

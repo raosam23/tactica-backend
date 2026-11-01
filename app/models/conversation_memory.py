@@ -18,14 +18,23 @@ class ConversationMemory(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     conversation_id: uuid.UUID = Field(
-        sa_column=Column(UUID(as_uuid=True), ForeignKey("conversation.id", ondelete="CASCADE"), nullable=False, index=True)
+        sa_column=Column(
+            UUID(as_uuid=True),
+            ForeignKey("conversation.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
     )
     content: str = Field(sa_column=Column(Text, nullable=False))
-    embedding: Any = Field(sa_column=Column(Vector(settings.VECTOR_DIMENSION), nullable=False))
+    embedding: Any = Field(
+        sa_column=Column(Vector(settings.VECTOR_DIMENSION), nullable=False)
+    )
     source_type: str = Field(sa_column=Column(String, nullable=False, index=True))
     metadata_: Optional[Dict[str, Any]] = Field(
         default_factory=dict,
-        sa_column=Column("metadata", JSONB, server_default=text("'{}'::jsonb"), nullable=True),
+        sa_column=Column(
+            "metadata", JSONB, server_default=text("'{}'::jsonb"), nullable=True
+        ),
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

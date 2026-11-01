@@ -1,5 +1,4 @@
-from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
-                                    create_async_engine)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from app.core.config import settings
@@ -17,10 +16,12 @@ async_session_maker = async_sessionmaker(
     expire_on_commit=False,
 )
 
+
 async def init_db():
     """Initialize the database."""
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+
 
 async def get_session():
     """Get a database session."""

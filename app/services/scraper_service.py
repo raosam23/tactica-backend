@@ -5,12 +5,11 @@ import httpx
 
 
 async def scrape_wikipedia_articles(
-    titles: List[str],
-    sport: Optional[str] = None
+    titles: List[str], sport: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Scrapes Wikipedia articles and return their content with metadata.
-    
+
     Args:
         titles (List[str]): A List of Wikipedia article titles (underscores for spaces).
         sport (Optional[str]): An optional sport category to tag all articles with
@@ -18,9 +17,7 @@ async def scrape_wikipedia_articles(
     Returns:
         List[Dict[str, Any]]: A List of Dictionaries with title, content, url, source, sport, tags
     """
-    headers = {
-        "User-Agent": "Tactica/1.0 (sports chatbot; contact@tactica.com)"
-    }
+    headers = {"User-Agent": "Tactica/1.0 (sports chatbot; contact@tactica.com)"}
     titles_param = "|".join(titles)
     url = "https://en.wikipedia.org/w/api.php"
     params = {
@@ -48,20 +45,21 @@ async def scrape_wikipedia_articles(
         if not content:
             continue
         tags = page["title"].lower().split()
-        results.append({
-            "title": page["title"],
-            "content": content,
-            "url": f"https://en.wikipedia.org/wiki/{page['title'].replace(' ', '_')}",
-            "source": "wikipedia",
-            "sport": sport,
-            "tags": tags,
-        })
+        results.append(
+            {
+                "title": page["title"],
+                "content": content,
+                "url": f"https://en.wikipedia.org/wiki/{page['title'].replace(' ', '_')}",
+                "source": "wikipedia",
+                "sport": sport,
+                "tags": tags,
+            }
+        )
     return results
 
 
 async def scrape_rss_feeds(
-    urls: List[str],
-    sport: Optional[str] = None
+    urls: List[str], sport: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Scrapes RSS feeds and return article content with metadata.
@@ -88,16 +86,18 @@ async def scrape_rss_feeds(
 
             if hasattr(entry, "content") and len(entry.content) > 0:
                 content = entry.content[0].get("value", content)
-            
+
             tags = title.lower().split() if title else []
-            
-            results.append({
-                "title": title,
-                "content": content,
-                "url": link,
-                "source": source_name,
-                "sport": sport,
-                "tags": tags,
-                "published_date": published_date,
-            })
+
+            results.append(
+                {
+                    "title": title,
+                    "content": content,
+                    "url": link,
+                    "source": source_name,
+                    "sport": sport,
+                    "tags": tags,
+                    "published_date": published_date,
+                }
+            )
     return results
